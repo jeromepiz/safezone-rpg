@@ -641,7 +641,7 @@
   <header id="topbar">
     <div class="avatar-wrap" style="cursor:pointer" onclick="openAvatarCreator()">
       <div class="avatar-ring">
-        <div class="avatar-img" id="topbar-avatar">🦺</div>
+        <div class="avatar-img" id="topbar-avatar"><img src="avatars/recrue.png" style="width:100%;height:100%;object-fit:contain;" /></div>
       </div>
       <div class="avatar-level" id="topbar-level">Nv.1</div>
     </div>
@@ -677,7 +677,7 @@
       </div>
       <div class="hero-banner">
         <div class="hero-banner-top">
-          <div class="hero-avatar-big" id="hero-avatar-big">🦺</div>
+          <div class="hero-avatar-big" id="hero-avatar-big"><img src="avatars/recrue.png" style="width:100%;height:100%;object-fit:contain;" /></div>
           <div class="hero-meta">
             <div class="hero-callsign" id="hero-name">Mon Héros</div>
             <div class="hero-class" id="hero-class">⚡ Recrue</div>
@@ -742,7 +742,7 @@
       <div class="card">
         <div class="profile-avatar-section">
           <div class="profile-avatar-ring">
-            <div class="profile-avatar-inner" id="profile-avatar-big">🦺</div>
+            <div class="profile-avatar-inner" id="profile-avatar-big"><img src="avatars/recrue.png" style="width:88%;height:88%;object-fit:contain;" /></div>
           </div>
           <div class="profile-name" id="profile-name">Mon Héros</div>
           <div class="profile-role" id="profile-class">⚡ Recrue · Niveau 1</div>
@@ -907,7 +907,7 @@
         <div class="rank-row"><div class="rank-pos">5</div><div class="rank-avatar">🎯</div><div class="rank-name">Nadia M.</div><div class="rank-pts">2 180 pts</div></div>
         <div class="rank-row me" id="my-rank-row">
           <div class="rank-pos" style="color:var(--accent-primary)">#</div>
-          <div class="rank-avatar" id="rank-my-avatar" style="border-color:var(--accent-primary);">🦺</div>
+          <div class="rank-avatar" id="rank-my-avatar" style="border-color:var(--accent-primary);"><img src="avatars/recrue.png" style="width:100%;height:100%;object-fit:contain;" /></div>
           <div class="rank-name" style="color:var(--accent-primary)" id="rank-my-name">Mon Héros (Moi)</div>
           <div class="rank-pts" id="rank-my-pts">0 pts</div>
         </div>
@@ -953,7 +953,7 @@
   <!-- Prévisualisation -->
   <div class="avatar-preview-zone">
     <div class="avatar-preview-frame" id="avatar-preview-frame">
-      <div class="avatar-preview-inner" id="avatar-preview-emoji">🦺</div>
+      <div class="avatar-preview-inner" id="avatar-preview-img-wrap"><img id="avatar-preview-img" src="avatars/recrue.png" style="width:88%;height:88%;object-fit:contain;transition:transform 0.2s ease;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.5))" /></div>
     </div>
     <input
       type="text"
@@ -966,10 +966,10 @@
     <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);">Tap sur l'avatar pour l'animer ✨</div>
   </div>
 
-  <!-- Section 1 : Choisir son emoji -->
+  <!-- Section 1 : Choisir son personnage -->
   <div class="avatar-section">
     <div class="avatar-section-title">🎭 Ton personnage</div>
-    <div class="avatar-emoji-grid" id="emoji-grid">
+    <div class="avatar-char-grid" id="char-grid">
       <!-- généré par JS -->
     </div>
   </div>
@@ -1007,89 +1007,7 @@
   <div class="xp-popup-sub">Ton profil héros est prêt</div>
 </div>
 
-<script>
-/* ═══════════════════════════════════════════════════════════════════
-   API — SafeZone RPG (S-03)
-═══════════════════════════════════════════════════════════════════ */
-const API_URL = "https://script.google.com/macros/s/AKfycbx71CS0GXaFT2pLVm4aXS_OxC8mrcWvMI7be9r-KycELxy2qzYyOWMWgWyVANUywhsj/exec";
 
-async function apiGet(params) {
-  try {
-    const qs  = new URLSearchParams(params).toString();
-    const res = await fetch(`${API_URL}?${qs}`);
-    const j   = await res.json();
-    return j.ok ? j.data : null;
-  } catch(e) { console.warn('[API GET]', e); return null; }
-}
-
-async function apiPost(body) {
-  try {
-    const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
-    const j   = await res.json();
-    return j.ok ? j.data : null;
-  } catch(e) { console.warn('[API POST]', e); return null; }
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   STATE — profil local (localStorage pour S-04, Sheets en S-05)
-═══════════════════════════════════════════════════════════════════ */
-const DEFAULT_PROFILE = {
-  userId:    'local_' + Math.random().toString(36).slice(2,10),
-  pseudo:    '',
-  avatar:    '🦺',
-  color:     '#00d4ff',
-  classe:    'recrue',
-  xp:        0,
-  niveau:    1,
-  badges:    [],
-  quetes:    [],
-  dateInscription: new Date().toISOString()
-};
-
-function loadProfile() {
-  try {
-    const raw = localStorage.getItem('safezone_profile');
-    return raw ? { ...DEFAULT_PROFILE, ...JSON.parse(raw) } : { ...DEFAULT_PROFILE };
-  } catch(e) { return { ...DEFAULT_PROFILE }; }
-}
-
-function saveProfile(profile) {
-  try { localStorage.setItem('safezone_profile', JSON.stringify(profile)); } catch(e) {}
-}
-
-let PROFILE = loadProfile();
-
-/* ═══════════════════════════════════════════════════════════════════
-   DONNÉES AVATAR CREATOR
-═══════════════════════════════════════════════════════════════════ */
-const AVATARS = [
-  { emoji: '🦺', label: 'Gilet',      unlock: 0 },
-  { emoji: '👷', label: 'Casque',     unlock: 0 },
-  { emoji: '🧰', label: 'Toolbox',    unlock: 0 },
-  { emoji: '🔧', label: 'Mécanicien', unlock: 0 },
-  { emoji: '🚒', label: 'Pompier',    unlock: 100 },
-  { emoji: '🩺', label: 'Médecin',    unlock: 100 },
-  { emoji: '🦸', label: 'Héros',      unlock: 200 },
-  { emoji: '⚡', label: 'Énergie',    unlock: 200 },
-  { emoji: '🛡️', label: 'Gardien',    unlock: 300 },
-  { emoji: '🎯', label: 'Expert',     unlock: 300 },
-  { emoji: '🔥', label: 'Flamme',     unlock: 500 },
-  { emoji: '💎', label: 'Diamant',    unlock: 500 },
-  { emoji: '🌟', label: 'Étoile',     unlock: 800 },
-  { emoji: '🏆', label: 'Champion',   unlock: 1000 },
-  { emoji: '🚀', label: 'Fusée',      unlock: 1500 },
-];
-
-const COLORS = [
-  { value: '#00d4ff', label: 'Cyan',    style: 'background:#00d4ff' },
-  { value: '#f7c520', label: 'Or',      style: 'background:#f7c520' },
-  { value: '#2ed573', label: 'Vert',    style: 'background:#2ed573' },
-  { value: '#ff4757', label: 'Rouge',   style: 'background:#ff4757' },
-  { value: '#a855f7', label: 'Violet',  style: 'background:#a855f7' },
-  { value: '#ff6b35', label: 'Orange',  style: 'background:#ff6b35' },
-  { value: '#e8f4fd', label: 'Blanc',   style: 'background:#e8f4fd' },
-  { value: '#40e0d0', label: 'Turquoise',style:'background:linear-gradient(135deg,#40e0d0,#00c9ff)' },
-];
-
-const CLASSES = [
-  { id: 'recrue',    icon: '⚡', name: 'Recrue',          desc:
+<script src="app.js"></script>
+</body>
+</html>
