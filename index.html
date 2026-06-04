@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f1923" />
+  <meta name="description" content="SafeZone RPG — Sécurité au travail gamifiée · PIZZORNO Valence" />
+  <title>SafeZone RPG</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@300;400;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─── CSS VARIABLES ─────────────────────────────────────────────── */
+    :root {
+      --bg-base:        #0b1219;
+      --bg-panel:       #111c27;
+      --bg-card:        #162233;
+      --bg-elevated:    #1c2d3e;
+
+      --accent-primary: #00d4ff;
+      --accent-secondary:#f7c520;
+      --accent-danger:  #ff4757;
+      --accent-success: #2ed573;
+      --accent-purple:  #a855f7;
+
+      --text-primary:   #e8f4fd;
+      --text-secondary: #7a9bb5;
+      --text-muted:     #3d5a70;
+
+      --border:         rgba(0,212,255,0.12);
+      --border-bright:  rgba(0,212,255,0.35);
+
+      --topbar-h:       72px;
+      --navbar-h:       72px;
+      --safe-bottom:    env(safe-area-inset-bottom, 0px);
+
+      --glow-primary:   0 0 20px rgba(0,212,255,0.35);
+      --glow-gold:      0 0 20px rgba(247,197,32,0.4);
+      --glow-danger:    0 0 20px rgba(255,71,87,0.4);
+
+      --font-display:   'Exo 2', sans-serif;
+      --font-ui:        'Rajdhani', sans-serif;
+      --font-mono:      'Share Tech Mono', monospace;
+
+      --radius-sm:      6px;
+      --radius-md:      12px;
+      --radius-lg:      18px;
+      --radius-xl:      24px;
+    }
+
+    /* ─── RESET ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; width: 100%;
+      overflow: hidden;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ─── SCANLINE OVERLAY ──────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0,0,0,0.06) 3px,
+        rgba(0,0,0,0.06) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ─── APP SHELL ──────────────────────────────────────────────────── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      height: 100vh;
+      max-width: 480px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    /* ─── TOPBAR ─────────────────────────────────────────────────────── */
+    #topbar {
+      height: var(--topbar-h);
+      background: linear-gradient(135deg, var(--bg-panel) 0%, #0e1f2f 100%);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 14px;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 100;
+    }
+    #topbar::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+      opacity: 0.6;
+    }
+
+    /* Avatar */
+    .avatar-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .avatar-ring {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent-primary) 72%, var(--bg-elevated) 72%);
+      display: flex; align-items: center; justify-content: center;
+      padding: 2.5px;
+      animation: ring-pulse 3s ease-in-out infinite;
+    }
+    @keyframes ring-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(0,212,255,0.0); }
+      50%      { box-shadow: 0 0 10px 3px rgba(0,212,255,0.3); }
+    }
+    .avatar-img {
+      width: 100%; height: 100%;
+      border-radius: 50%;
+      background: var(--bg-elevated);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      overflow: hidden;
+    }
+    .avatar-level {
+      position: absolute;
+      bottom: -3px; right: -3px;
+      background: var(--accent-secondary);
+      color: #0b1219;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 4px;
+      line-height: 1.4;
+      box-shadow: var(--glow-gold);
+    }
+
+    /* Player info */
+    .player-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .player-name {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .player-title {
+      font-size: 10px;
+      color: var(--accent-primary);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+      margin-bottom: 5px;
+    }
+
+    /* XP Bar */
+    .xp-bar-wrap {
+      position: relative;
+    }
+    .xp-bar-track {
+      height: 6px;
+      background: var(--bg-elevated);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .xp-bar-fill {
+      height: 100%;
+      width: 36%;
+      background: linear-gradient(90deg, var(--accent-primary), #00fff7);
+      border-radius: 3px;
+      position: relative;
+      transition: width 1s ease;
+    }
+    .xp-bar-fill::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 8px; height: 100%;
+      background: white;
+      opacity: 0.6;
+      border-radius: 2px;
+      animation: xp-shimmer 2s ease-in-out infinite;
+    }
+    @keyframes xp-shimmer {
+      0%,100% { opacity: 0.3; }
+      50%      { opacity: 0.8; }
+    }
+    .xp-label {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 3px;
+    }
+    .xp-label span {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-muted);
+    }
+    .xp-label .xp-val { color: var(--accent-primary); }
+
+    /* Points / gems */
+    .points-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .points-gem {
+      font-size: 18px;
+      filter: drop-shadow(0 0 4px var(--accent-secondary));
+      animation: gem-float 3s ease-in-out infinite;
+    }
+    @keyframes gem-float {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-2px); }
+    }
+    .points-val {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-secondary);
+      letter-spacing: 0.5px;
+    }
+    .points-lbl {
+      font-size: 8px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Notification dot */
+    .notif-dot {
+      position: absolute;
+      top: 10px; right: 14px;
+      width: 8px; height: 8px;
+      background: var(--accent-danger);
+      border-radius: 50%;
+      border: 2px solid var(--bg-panel);
+      animation: blink 1.5s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.2; }
+    }
+
+    /* ─── SCREEN CONTAINER ───────────────────────────────────────────── */
+    #screens {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      /* custom scrollbar */
+      scrollbar-width: thin;
+      scrollbar-color: var(--bg-elevated) transparent;
+    }
+    #screens::-webkit-scrollbar { width: 3px; }
+    #screens::-webkit-scrollbar-track { background: transparent; }
+    #screens::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 2px; }
+
+    .screen {
+      display: none;
+      min-height: 100%;
+      padding: 16px 14px calc(16px + var(--safe-bottom));
+      animation: screen-in 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    }
+    .screen.active { display: block; }
+    @keyframes screen-in {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── SCREEN HEADERS ─────────────────────────────────────────────── */
+    .screen-header {
+      margin-bottom: 20px;
+    }
+    .screen-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--accent-primary);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      opacity: 0.8;
+    }
+    .screen-title {
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: -0.5px;
+      line-height: 1.1;
+    }
+    .screen-title span {
+      color: var(--accent-primary);
+    }
+    .screen-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      font-weight: 400;
+    }
+
+    /* ─── CARD COMPONENT ─────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-bottom: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+      opacity: 0.4;
+    }
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+
+    /* ─── BADGE PILL ─────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-cyan   { background: rgba(0,212,255,0.12); color: var(--accent-primary); border: 1px solid rgba(0,212,255,0.3); }
+    .badge-gold   { background: rgba(247,197,32,0.12); color: var(--accent-secondary); border: 1px solid rgba(247,197,32,0.3); }
+    .badge-red    { background: rgba(255,71,87,0.12);  color: var(--accent-danger);   border: 1px solid rgba(255,71,87,0.3); }
+    .badge-green  { background: rgba(46,213,115,0.12); color: var(--accent-success);  border: 1px solid rgba(46,213,115,0.3); }
+    .badge-purple { background: rgba(168,85,247,0.12); color: var(--accent-purple);   border: 1px solid rgba(168,85,247,0.3); }
+
+    /* ─── DIVIDER ────────────────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 0;
+    }
+
+    /* ─── STAT ROW ───────────────────────────────────────────────────── */
+    .stat-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .stat-item {
+      flex: 1;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 10px;
+      text-align: center;
+    }
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+    .stat-value.cyan   { color: var(--accent-primary); }
+    .stat-value.gold   { color: var(--accent-secondary); }
+    .stat-value.green  { color: var(--accent-success); }
+    .stat-value.purple { color: var(--accent-purple); }
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ─── PROGRESS BAR ───────────────────────────────────────────────── */
+    .progress-bar {
+      height: 8px;
+      background: var(--bg-elevated);
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.8s ease;
+    }
+    .progress-fill.cyan   { background: linear-gradient(90deg, var(--accent-primary), #00fff7); }
+    .progress-fill.gold   { background: linear-gradient(90deg, #e6a800, var(--accent-secondary)); }
+    .progress-fill.green  { background: linear-gradient(90deg, #1aaf52, var(--accent-success)); }
+    .progress-fill.purple { background: linear-gradient(90deg, #7c3aed, var(--accent-purple)); }
+    .progress-fill.red    { background: linear-gradient(90deg, #cc1e2e, var(--accent-danger)); }
+
+    /* ─── BUTTON ─────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      text-decoration: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active { transform: scale(0.96); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-primary), #007fa3);
+      color: #0b1219;
+      box-shadow: var(--glow-primary);
+    }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-bright);
+    }
+    .btn-danger {
+      background: linear-gradient(135deg, var(--accent-danger), #c0392b);
+      color: white;
+      box-shadow: var(--glow-danger);
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, var(--accent-secondary), #c9a000);
+      color: #0b1219;
+      box-shadow: var(--glow-gold);
+    }
+    .btn-full { width: 100%; }
+
+    /* ─── LIST ITEM ──────────────────────────────────────────────────── */
+    .list-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    .list-icon {
+      width: 40px; height: 40px;
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .list-icon.cyan   { background: rgba(0,212,255,0.1);  border: 1px solid rgba(0,212,255,0.25); }
+    .list-icon.gold   { background: rgba(247,197,32,0.1); border: 1px solid rgba(247,197,32,0.25); }
+    .list-icon.green  { background: rgba(46,213,115,0.1); border: 1px solid rgba(46,213,115,0.25); }
+    .list-icon.red    { background: rgba(255,71,87,0.1);  border: 1px solid rgba(255,71,87,0.25); }
+    .list-icon.purple { background: rgba(168,85,247,0.1); border: 1px solid rgba(168,85,247,0.25); }
+    .list-body { flex: 1; min-width: 0; }
+    .list-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .list-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 1px;
+    }
+    .list-right { flex-shrink: 0; text-align: right; }
+
+    /* ─── EMPTY STATE ────────────────────────────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      text-align: center;
+      gap: 10px;
+    }
+    .empty-icon { font-size: 48px; opacity: 0.4; }
+    .empty-title {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-secondary);
+    }
+    .empty-text {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* ─── COMING SOON BOX ────────────────────────────────────────────── */
+    .coming-soon {
+      background: var(--bg-card);
+      border: 1px dashed var(--border-bright);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .coming-soon-icon { font-size: 36px; margin-bottom: 8px; }
+    .coming-soon-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--accent-primary);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .coming-soon-text {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* ─── SCREEN: HÉROS ──────────────────────────────────────────────── */
+    #screen-hero {
+      /* specific */
+    }
+
+    .hero-banner {
+      background: linear-gradient(135deg, var(--bg-card) 0%, #0e2436 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 20px;
+      margin-bottom: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-banner::after {
+      content: '🛡️';
+      position: absolute;
+      right: -6px; bottom: -10px;
+      font-size: 80px;
+      opacity: 0.06;
+      transform: rotate(-10deg);
+      pointer-events: none;
+    }
+    .hero-banner-top {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .hero-avatar-big {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      background: var(--bg-elevated);
+      border: 2px solid var(--accent-primary);
+      box-shadow: var(--glow-primary);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px;
+      flex-shrink: 0;
+    }
+    .hero-meta {}
+    .hero-callsign {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+    .hero-class {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--accent-primary);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+    .hero-badges-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .skill-bar-row {
+      margin-bottom: 10px;
+    }
+    .skill-bar-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .skill-bar-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .skill-bar-pct {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* daily missions */
+    .missions-list {}
+    .mission-item {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      transition: border-color 0.2s;
+    }
+    .mission-item:active { border-color: var(--accent-primary); }
+    .mission-check {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      border: 2px solid var(--border-bright);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .mission-check.done {
+      background: var(--accent-success);
+      border-color: var(--accent-success);
+      color: #0b1219;
+    }
+    .mission-text {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .mission-text.done {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+    .mission-xp {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent-primary);
+      background: rgba(0,212,255,0.08);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    /* ─── SCREEN: PROFIL ─────────────────────────────────────────────── */
+    .profile-avatar-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 0;
+      gap: 10px;
+    }
+    .profile-avatar-ring {
+      width: 90px; height: 90px;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent-primary) 72%, var(--bg-elevated) 72%);
+      display: flex; align-items: center; justify-content: center;
+      padding: 4px;
+      box-shadow: var(--glow-primary);
+    }
+    .profile-avatar-inner {
+      width: 100%; height: 100%;
+      background: var(--bg-elevated);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 44px;
+    }
+    .profile-name {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+    .profile-role {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--accent-primary);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* ─── SCREEN: QUÊTES ─────────────────────────────────────────────── */
+    .quest-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      padding: 4px;
+      border: 1px solid var(--border);
+    }
+    .quest-tab {
+      flex: 1;
+      padding: 8px;
+      border-radius: var(--radius-sm);
+      text-align: center;
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      background: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .quest-tab.active {
+      background: var(--bg-elevated);
+      color: var(--accent-primary);
+      border: 1px solid var(--border-bright);
+    }
+
+    .quest-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      margin-bottom: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .quest-card-accent {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      border-radius: 3px 0 0 3px;
+    }
+    .quest-card-accent.gold   { background: var(--accent-secondary); }
+    .quest-card-accent.cyan   { background: var(--accent-primary); }
+    .quest-card-accent.purple { background: var(--accent-purple); }
+    .quest-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .quest-name {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 700;
+      flex: 1;
+      padding-right: 8px;
+    }
+    .quest-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+    .quest-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .quest-reward {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent-secondary);
+    }
+
+    /* ─── SCREEN: DÉFI ───────────────────────────────────────────────── */
+    .defi-hero {
+      background: linear-gradient(135deg, #1a0a2e 0%, #0e1f3d 100%);
+      border: 1px solid rgba(168,85,247,0.3);
+      border-radius: var(--radius-xl);
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .defi-hero::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%; transform: translateX(-50%);
+      width: 200px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-purple), transparent);
+    }
+    .defi-icon-big { font-size: 54px; margin-bottom: 10px; }
+    .defi-title-big {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--accent-purple);
+      margin-bottom: 4px;
+    }
+    .defi-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    .defi-timer {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .defi-timer-unit {
+      text-align: center;
+    }
+    .defi-timer-val {
+      font-family: var(--font-mono);
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      width: 52px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .defi-timer-lbl {
+      font-size: 8px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 3px;
+    }
+
+    /* ─── SCREEN: SIGNALER ───────────────────────────────────────────── */
+    .signal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .signal-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .signal-btn:active { transform: scale(0.95); }
+    .signal-btn.danger  { border-color: rgba(255,71,87,0.3);  }
+    .signal-btn.warning { border-color: rgba(247,197,32,0.3); }
+    .signal-btn.info    { border-color: rgba(0,212,255,0.3);  }
+    .signal-btn.success { border-color: rgba(46,213,115,0.3); }
+    .signal-btn.danger:active  { background: rgba(255,71,87,0.08);  border-color: var(--accent-danger); }
+    .signal-btn.warning:active { background: rgba(247,197,32,0.08); border-color: var(--accent-secondary); }
+    .signal-btn.info:active    { background: rgba(0,212,255,0.08);  border-color: var(--accent-primary); }
+    .signal-btn.success:active { background: rgba(46,213,115,0.08); border-color: var(--accent-success); }
+    .signal-btn-icon { font-size: 32px; }
+    .signal-btn-label {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+    .signal-btn-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .sos-btn {
+      width: 100%;
+      background: linear-gradient(135deg, rgba(255,71,87,0.15), rgba(255,71,87,0.08));
+      border: 2px solid var(--accent-danger);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: all 0.2s;
+      box-shadow: var(--glow-danger);
+      margin-bottom: 14px;
+    }
+    .sos-btn:active { transform: scale(0.98); }
+    .sos-icon { font-size: 36px; }
+    .sos-text {}
+    .sos-title {
+      font-family: var(--font-display);
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--accent-danger);
+      letter-spacing: 0.5px;
+    }
+    .sos-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 1px;
+    }
+
+    /* ─── SCREEN: RANG ───────────────────────────────────────────────── */
+    .podium {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding-top: 10px;
+    }
+    .podium-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .podium-avatar {
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      background: var(--bg-elevated);
+    }
+    .podium-item:nth-child(1) .podium-avatar { width: 52px; height: 52px; border: 2px solid #c0c0c0; }
+    .podium-item:nth-child(2) .podium-avatar { width: 64px; height: 64px; border: 2px solid var(--accent-secondary); box-shadow: var(--glow-gold); }
+    .podium-item:nth-child(3) .podium-avatar { width: 52px; height: 52px; border: 2px solid #cd7f32; }
+    .podium-name { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-align: center; }
+    .podium-pts {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .podium-item:nth-child(1) .podium-pts { color: #c0c0c0; }
+    .podium-item:nth-child(2) .podium-pts { color: var(--accent-secondary); }
+    .podium-item:nth-child(3) .podium-pts { color: #cd7f32; }
+    .podium-plinth {
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      width: 72px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--bg-base);
+    }
+    .podium-item:nth-child(1) .podium-plinth { background: #c0c0c0; height: 60px; }
+    .podium-item:nth-child(2) .podium-plinth { background: var(--accent-secondary); height: 80px; }
+    .podium-item:nth-child(3) .podium-plinth { background: #cd7f32; height: 44px; }
+
+    .rank-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      margin-bottom: 7px;
+    }
+    .rank-row.me {
+      border-color: var(--accent-primary);
+      background: rgba(0,212,255,0.06);
+      box-shadow: var(--glow-primary);
+    }
+    .rank-pos {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      width: 22px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .rank-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .rank-name {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .rank-pts {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--accent-secondary);
+      font-weight: 700;
+    }
+
+    /* ─── NAVBAR ─────────────────────────────────────────────────────── */
+    #navbar {
+      height: var(--navbar-h);
+      padding-bottom: var(--safe-bottom);
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: stretch;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 100;
+    }
+    #navbar::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+      opacity: 0.4;
+    }
+
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: all 0.18s ease;
+      position: relative;
+      padding: 8px 2px;
+      border: none;
+      background: none;
+    }
+
+    .nav-item::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 10%; right: 10%;
+      height: 2px;
+      background: var(--accent-primary);
+      border-radius: 0 0 2px 2px;
+      transform: scaleX(0);
+      transition: transform 0.2s ease;
+    }
+    .nav-item.active::before { transform: scaleX(1); }
+
+    .nav-icon {
+      font-size: 20px;
+      transition: transform 0.2s ease, filter 0.2s ease;
+      position: relative;
+    }
+    .nav-item.active .nav-icon {
+      transform: translateY(-1px);
+      filter: drop-shadow(0 0 6px rgba(0,212,255,0.6));
+    }
+    .nav-item:active .nav-icon { transform: scale(0.88) translateY(-1px); }
+
+    .nav-label {
+      font-family: var(--font-ui);
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: color 0.2s;
+    }
+    .nav-item.active .nav-label { color: var(--accent-primary); }
+
+    .nav-badge {
+      position: absolute;
+      top: 6px; right: calc(50% - 16px);
+      width: 14px; height: 14px;
+      background: var(--accent-danger);
+      border-radius: 50%;
+      border: 2px solid var(--bg-panel);
+      font-size: 7px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Special signal button */
+    .nav-item.nav-signal .nav-icon-wrap {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-danger), #8b0000);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--glow-danger);
+      margin-bottom: 1px;
+      transition: all 0.2s;
+    }
+    .nav-item.nav-signal.active .nav-icon-wrap,
+    .nav-item.nav-signal:active .nav-icon-wrap {
+      box-shadow: 0 0 0 4px rgba(255,71,87,0.2), var(--glow-danger);
+    }
+    .nav-item.nav-signal .nav-icon {
+      font-size: 18px;
+      filter: none;
+    }
+
+    /* ─── TOAST ──────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: calc(var(--navbar-h) + 16px + var(--safe-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-bright);
+      border-radius: var(--radius-md);
+      padding: 10px 18px;
+      font-size: 13px;
+      font-family: var(--font-ui);
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 9998;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+  </style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── TOPBAR ─────────────────────────────────────────────────────── -->
+  <header id="topbar">
+
+    <!-- Avatar -->
+    <div class="avatar-wrap">
+      <div class="avatar-ring">
+        <div class="avatar-img">🦺</div>
+      </div>
+      <div class="avatar-level">Nv.4</div>
+    </div>
+
+    <!-- Player info + XP -->
+    <div class="player-info">
+      <div class="player-title">Agent SafeZone</div>
+      <div class="player-name">Jérôme D.</div>
+      <div class="xp-bar-wrap">
+        <div class="xp-bar-track">
+          <div class="xp-bar-fill" id="xp-fill" style="width:36%"></div>
+        </div>
+        <div class="xp-label">
+          <span>XP</span>
+          <span class="xp-val" id="xp-text">360 / 1000</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Points -->
+    <div class="points-wrap">
+      <div class="points-gem">💎</div>
+      <div class="points-val" id="pts-val">1 240</div>
+      <div class="points-lbl">Points</div>
+    </div>
+
+  </header>
+
+  <!-- ── SCREENS ────────────────────────────────────────────────────── -->
+  <main id="screens">
+
+    <!-- ── HÉROS ───────────────────────────────────────── -->
+    <section id="screen-hero" class="screen active">
+
+      <div class="screen-header">
+        <div class="screen-eyebrow">Tableau de bord</div>
+        <div class="screen-title">Mon <span>Héros</span></div>
+        <div class="screen-subtitle">PIZZORNO Valence · Agence</div>
+      </div>
+
+      <!-- Hero card -->
+      <div class="hero-banner">
+        <div class="hero-banner-top">
+          <div class="hero-avatar-big">🦺</div>
+          <div class="hero-meta">
+            <div class="hero-callsign">Jérôme D.</div>
+            <div class="hero-class">⚡ Garde de Sécurité</div>
+            <div class="hero-badges-row">
+              <span class="badge badge-gold">🏆 Niveau 4</span>
+              <span class="badge badge-green">✅ Actif</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Skills -->
+        <div class="skill-bar-row">
+          <div class="skill-bar-header">
+            <span class="skill-bar-name">🛡️ Prévention</span>
+            <span class="skill-bar-pct">72%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill cyan" style="width:72%"></div></div>
+        </div>
+        <div class="skill-bar-row">
+          <div class="skill-bar-header">
+            <span class="skill-bar-name">⚡ Réactivité</span>
+            <span class="skill-bar-pct">58%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill gold" style="width:58%"></div></div>
+        </div>
+        <div class="skill-bar-row">
+          <div class="skill-bar-header">
+            <span class="skill-bar-name">📚 Formation</span>
+            <span class="skill-bar-pct">45%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill purple" style="width:45%"></div></div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stat-row">
+        <div class="stat-item">
+          <div class="stat-value gold">12</div>
+          <div class="stat-label">Quêtes</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value cyan">3</div>
+          <div class="stat-label">Signalements</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value green">5</div>
+          <div class="stat-label">Badges</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value purple">#8</div>
+          <div class="stat-label">Classement</div>
+        </div>
+      </div>
+
+      <!-- Daily missions -->
+      <div class="card">
+        <div class="card-title">⚔️ Missions du Jour</div>
+        <div class="missions-list">
+          <div class="mission-item">
+            <div class="mission-check done">✓</div>
+            <div class="mission-text done">Connexion quotidienne</div>
+            <div class="mission-xp">+10 XP</div>
+          </div>
+          <div class="mission-item">
+            <div class="mission-check done">✓</div>
+            <div class="mission-text done">Compléter 1 quiz sécurité</div>
+            <div class="mission-xp">+50 XP</div>
+          </div>
+          <div class="mission-item">
+            <div class="mission-check"></div>
+            <div class="mission-text">Signaler 1 situation à risque</div>
+            <div class="mission-xp">+75 XP</div>
+          </div>
+          <div class="mission-item">
+            <div class="mission-check"></div>
+            <div class="mission-text">Terminer une quête active</div>
+            <div class="mission-xp">+100 XP</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Last activity -->
+      <div class="card">
+        <div class="card-title">🕐 Activité Récente</div>
+        <div class="list-item">
+          <div class="list-icon cyan">🎯</div>
+          <div class="list-body">
+            <div class="list-name">Quiz Port des EPI réussi</div>
+            <div class="list-sub">Il y a 2 heures · +50 XP</div>
+          </div>
+          <span class="badge badge-green">+50 XP</span>
+        </div>
+        <div class="list-item">
+          <div class="list-icon red">⚠️</div>
+          <div class="list-body">
+            <div class="list-name">Signalement flash envoyé</div>
+            <div class="list-sub">Hier · +75 XP</div>
+          </div>
+          <span class="badge badge-green">+75 XP</span>
+        </div>
+        <div class="list-item">
+          <div class="list-icon gold">🏆</div>
+          <div class="list-body">
+            <div class="list-name">Badge "Vigilant" obtenu</div>
+            <div class="list-sub">Il y a 3 jours</div>
+          </div>
+          <span class="badge badge-gold">BADGE</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── PROFIL ───────────────────────────────────────── -->
+    <section id="screen-profil" class="screen">
+
+      <div class="screen-header">
+        <div class="screen-eyebrow">Identité</div>
+        <div class="screen-title">Mon <span>Profil</span></div>
+      </div>
+
+      <div class="card">
+        <div class="profile-avatar-section">
+          <div class="profile-avatar-ring">
+            <div class="profile-avatar-inner">🦺</div>
+          </div>
+          <div class="profile-name">Jérôme D.</div>
+          <div class="profile-role">⚡ Garde de Sécurité · Niveau 4</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px;">
+            <span class="badge badge-cyan">🏢 Valence</span>
+            <span class="badge badge-gold">💎 1 240 pts</span>
+            <span class="badge badge-purple">📅 Depuis Jan. 2025</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-item">
+          <div class="stat-value cyan">360</div>
+          <div class="stat-label">XP Total</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value gold">1 240</div>
+          <div class="stat-label">Points</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value green">5</div>
+          <div class="stat-label">Badges</div>
+        </div>
+      </div>
+
+      <!-- Badges collection -->
+      <div class="card">
+        <div class="card-title">🏅 Collection de Badges</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;padding-top:4px;">
+          <div style="text-align:center;flex:0 0 60px;">
+            <div style="font-size:32px;filter:drop-shadow(0 0 6px rgba(0,212,255,0.5))">🛡️</div>
+            <div style="font-size:9px;color:var(--accent-primary);margin-top:3px;">Gardien</div>
+          </div>
+          <div style="text-align:center;flex:0 0 60px;">
+            <div style="font-size:32px;filter:drop-shadow(0 0 6px rgba(247,197,32,0.5))">⭐</div>
+            <div style="font-size:9px;color:var(--accent-secondary);margin-top:3px;">Vigilant</div>
+          </div>
+          <div style="text-align:center;flex:0 0 60px;">
+            <div style="font-size:32px;filter:drop-shadow(0 0 6px rgba(46,213,115,0.5))">🎯</div>
+            <div style="font-size:9px;color:var(--accent-success);margin-top:3px;">Précis</div>
+          </div>
+          <div style="text-align:center;flex:0 0 60px;">
+            <div style="font-size:32px;filter:drop-shadow(0 0 6px rgba(46,213,115,0.5))">🚀</div>
+            <div style="font-size:9px;color:var(--accent-success);margin-top:3px;">Rapide</div>
+          </div>
+          <div style="text-align:center;flex:0 0 60px;">
+            <div style="font-size:32px;filter:drop-shadow(0 0 6px rgba(168,85,247,0.5))">💡</div>
+            <div style="font-size:9px;color:var(--accent-purple);margin-top:3px;">Expert</div>
+          </div>
+          <div style="text-align:center;flex:0 0 60px;opacity:0.25;">
+            <div style="font-size:32px">🔒</div>
+            <div style="font-size:9px;color:var(--text-muted);margin-top:3px;">Verrouillé</div>
+          </div>
+          <div style="text-align:center;flex:0 0 60px;opacity:0.25;">
+            <div style="font-size:32px">🔒</div>
+            <div style="font-size:9px;color:var(--text-muted);margin-top:3px;">Verrouillé</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="coming-soon">
+        <div class="coming-soon-icon">✏️</div>
+        <div class="coming-soon-label">Session S-04 / S-05</div>
+        <div class="coming-soon-text">Personnalisation avatar · Sauvegarde profil Google Sheets</div>
+      </div>
+
+    </section>
+
+    <!-- ── QUÊTES ───────────────────────────────────────── -->
+    <section id="screen-quetes" class="screen">
+
+      <div class="screen-header">
+        <div class="screen-eyebrow">Objectifs</div>
+        <div class="screen-title">Mes <span>Quêtes</span></div>
+        <div class="screen-subtitle">3 quêtes actives · 2 terminées</div>
+      </div>
+
+      <div class="quest-tabs">
+        <button class="quest-tab active" onclick="switchQuestTab(this,'actives')">⚔️ Actives</button>
+        <button class="quest-tab" onclick="switchQuestTab(this,'terminees')">✅ Terminées</button>
+        <button class="quest-tab" onclick="switchQuestTab(this,'toutes')">📋 Toutes</button>
+      </div>
+
+      <div id="quests-actives">
+        <div class="quest-card">
+          <div class="quest-card-accent gold"></div>
+          <div class="quest-header">
+            <div class="quest-name">🏆 Maître des EPI</div>
+            <span class="badge badge-gold">ÉPIQUE</span>
+          </div>
+          <div class="quest-desc">Compléter 5 quiz sur les Équipements de Protection Individuelle avec un score > 80%.</div>
+          <div class="progress-bar" style="margin-bottom:6px;"><div class="progress-fill gold" style="width:60%"></div></div>
+          <div class="quest-footer">
+            <span style="font-size:11px;color:var(--text-muted)">3 / 5 complétés</span>
+            <div class="quest-reward">💎 +300 pts</div>
+          </div>
+        </div>
+
+        <div class="quest-card">
+          <div class="quest-card-accent cyan"></div>
+          <div class="quest-header">
+            <div class="quest-name">👁️ Œil du Guetteur</div>
+            <span class="badge badge-cyan">NORMAL</span>
+          </div>
+          <div class="quest-desc">Signaler 3 situations à risque validées par le service QSE.</div>
+          <div class="progress-bar" style="margin-bottom:6px;"><div class="progress-fill cyan" style="width:33%"></div></div>
+          <div class="quest-footer">
+            <span style="font-size:11px;color:var(--text-muted)">1 / 3 signalés</span>
+            <div class="quest-reward">💎 +150 pts</div>
+          </div>
+        </div>
+
+        <div class="quest-card">
+          <div class="quest-card-accent purple"></div>
+          <div class="quest-header">
+            <div class="quest-name">🔥 Série Parfaite</div>
+            <span class="badge badge-purple">RARE</span>
+          </div>
+          <div class="quest-desc">Se connecter et réaliser une action sécurité 7 jours consécutifs.</div>
+          <div class="progress-bar" style="margin-bottom:6px;"><div class="progress-fill purple" style="width:57%"></div></div>
+          <div class="quest-footer">
+            <span style="font-size:11px;color:var(--text-muted)">4 / 7 jours</span>
+            <div class="quest-reward">💎 +250 pts</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="quests-terminees" style="display:none">
+        <div class="quest-card" style="opacity:0.65;">
+          <div class="quest-card-accent green"></div>
+          <div class="quest-header">
+            <div class="quest-name">🎓 Première Formation</div>
+            <span class="badge badge-green">TERMINÉ</span>
+          </div>
+          <div class="quest-desc">Compléter votre premier module de formation en ligne.</div>
+          <div class="quest-footer">
+            <span style="font-size:11px;color:var(--text-muted)">Complété le 15 Jan.</span>
+            <div class="quest-reward" style="color:var(--accent-success)">✅ +100 pts</div>
+          </div>
+        </div>
+        <div class="quest-card" style="opacity:0.65;">
+          <div class="quest-card-accent green"></div>
+          <div class="quest-header">
+            <div class="quest-name">👋 Bienvenue Agent</div>
+            <span class="badge badge-green">TERMINÉ</span>
+          </div>
+          <div class="quest-desc">Créer votre profil SafeZone RPG et personnaliser votre avatar.</div>
+          <div class="quest-footer">
+            <span style="font-size:11px;color:var(--text-muted)">Complété le 3 Jan.</span>
+            <div class="quest-reward" style="color:var(--accent-success)">✅ +50 pts</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="quests-toutes" style="display:none">
+        <div class="coming-soon">
+          <div class="coming-soon-icon">📋</div>
+          <div class="coming-soon-label">Session S-09</div>
+          <div class="coming-soon-text">Catalogue complet des quêtes · Moteur de quêtes dynamiques</div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── DÉFI ─────────────────────────────────────────── -->
+    <section id="screen-defi" class="screen">
+
+      <div class="screen-header">
+        <div class="screen-eyebrow">Challenge</div>
+        <div class="screen-title">Défi <span>Hebdo</span></div>
+        <div class="screen-subtitle">Résultat de toute l'agence</div>
+      </div>
+
+      <!-- Current challenge -->
+      <div class="defi-hero">
+        <div class="defi-icon-big">🧠</div>
+        <div class="defi-title-big">Quiz Sécurité Incendie</div>
+        <div class="defi-subtitle">10 questions · Toute l'agence participe · 1er = 500 pts bonus</div>
+        <div class="defi-timer">
+          <div class="defi-timer-unit">
+            <div class="defi-timer-val" id="t-h">02</div>
+            <div class="defi-timer-lbl">Heures</div>
+          </div>
+          <div class="defi-timer-unit">
+            <div class="defi-timer-val" id="t-m">34</div>
+            <div class="defi-timer-lbl">Min</div>
+          </div>
+          <div class="defi-timer-unit">
+            <div class="defi-timer-val" id="t-s">17</div>
+            <div class="defi-timer-lbl">Sec</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-gold btn-full" style="margin-bottom:14px;" onclick="showToast('🎯 Défi disponible en S-07 !')">
+        ⚡ Relever le Défi
+      </button>
+
+      <!-- Stats -->
+      <div class="card">
+        <div class="card-title">📊 Participation Agence</div>
+        <div class="stat-row">
+          <div class="stat-item">
+            <div class="stat-value cyan">47</div>
+            <div class="stat-label">Participants</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value gold">78%</div>
+            <div class="stat-label">Moy. Score</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value purple">3ème</div>
+            <div class="stat-label">Ma position</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="card">
+        <div class="card-title">🗓️ Défis Passés</div>
+        <div class="list-item">
+          <div class="list-icon gold">🏆</div>
+          <div class="list-body">
+            <div class="list-name">Quiz Risques Chimiques</div>
+            <div class="list-sub">Semaine du 27 Jan · Score 9/10</div>
+          </div>
+          <span class="badge badge-gold">1er</span>
+        </div>
+        <div class="list-item">
+          <div class="list-icon cyan">🎯</div>
+          <div class="list-body">
+            <div class="list-name">Quiz Gestes et Postures</div>
+            <div class="list-sub">Semaine du 20 Jan · Score 7/10</div>
+          </div>
+          <span class="badge badge-cyan">3ème</span>
+        </div>
+        <div class="list-item">
+          <div class="list-icon purple">📋</div>
+          <div class="list-body">
+            <div class="list-name">Quiz Conduite Engins</div>
+            <div class="list-sub">Semaine du 13 Jan · Score 6/10</div>
+          </div>
+          <span class="badge badge-purple">5ème</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── SIGNALER ──────────────────────────────────────── -->
+    <section id="screen-signaler" class="screen">
+
+      <div class="screen-header">
+        <div class="screen-eyebrow">Alerte Flash</div>
+        <div class="screen-title">Si<span>gnaler</span></div>
+        <div class="screen-subtitle">Votre vigilance protège l'équipe</div>
+      </div>
+
+      <!-- SOS -->
+      <button class="sos-btn" onclick="showToast('🚨 SOS – Disponible en S-10 !')">
+        <div class="sos-icon">🚨</div>
+        <div class="sos-text">
+          <div class="sos-title">URGENCE / ACCIDENT</div>
+          <div class="sos-sub">Signalement immédiat au QSE · Priorité maximale</div>
+        </div>
+        <span style="font-size:20px;color:var(--accent-danger)">›</span>
+      </button>
+
+      <!-- Signal grid -->
+      <div class="signal-grid">
+        <div class="signal-btn danger" onclick="showToast('⚠️ Danger – Disponible en S-10 !')">
+          <div class="signal-btn-icon">⚠️</div>
+          <div class="signal-btn-label">Situation Dangereuse</div>
+          <div class="signal-btn-sub">+75 XP</div>
+        </div>
+        <div class="signal-btn warning" onclick="showToast('🔧 Signalement – Disponible en S-10 !')">
+          <div class="signal-btn-icon">🔧</div>
+          <div class="signal-btn-label">Équipement Défectueux</div>
+          <div class="signal-btn-sub">+50 XP</div>
+        </div>
+        <div class="signal-btn info" onclick="showToast('💡 Suggestion – Disponible en S-10 !')">
+          <div class="signal-btn-icon">💡</div>
+          <div class="signal-btn-label">Presque-Accident</div>
+          <div class="signal-btn-sub">+60 XP</div>
+        </div>
+        <div class="signal-btn success" onclick="showToast('👍 Bonne pratique – Disponible en S-10 !')">
+          <div class="signal-btn-icon">👍</div>
+          <div class="signal-btn-label">Bonne Pratique</div>
+          <div class="signal-btn-sub">+30 XP</div>
+        </div>
+      </div>
+
+      <!-- Recent signals -->
+      <div class="card">
+        <div class="card-title">📋 Mes Signalements</div>
+        <div class="list-item">
+          <div class="list-icon red">⚠️</div>
+          <div class="list-body">
+            <div class="list-name">Flaque d'huile zone 3</div>
+            <div class="list-sub">Il y a 2 jours · <span style="color:var(--accent-success)">Validé QSE ✓</span></div>
+          </div>
+          <span class="badge badge-green">+75 XP</span>
+        </div>
+        <div class="list-item">
+          <div class="list-icon cyan">💡</div>
+          <div class="list-body">
+            <div class="list-name">Éclairage vestiaire HS</div>
+            <div class="list-sub">Il y a 5 jours · <span style="color:var(--accent-secondary)">En cours…</span></div>
+          </div>
+          <span class="badge badge-gold">⏳</span>
+        </div>
+      </div>
+
+      <div class="coming-soon">
+        <div class="coming-soon-icon">📱</div>
+        <div class="coming-soon-label">Session S-10 / S-11</div>
+        <div class="coming-soon-text">Formulaire photo · Géolocalisation · Validation QSE · Telegram</div>
+      </div>
+
+    </section>
+
+    <!-- ── RANG ─────────────────────────────────────────── -->
+    <section id="screen-rang" class="screen">
+
+      <div class="screen-header">
+        <div class="screen-eyebrow">Classement</div>
+        <div class="screen-title">Hall of <span>Fame</span></div>
+        <div class="screen-subtitle">Agence de Valence · Semaine en cours</div>
+      </div>
+
+      <!-- Podium -->
+      <div class="podium">
+        <div class="podium-item">
+          <div class="podium-avatar">😎</div>
+          <div class="podium-name">Marie T.</div>
+          <div class="podium-pts">2 810 pts</div>
+          <div class="podium-plinth">2</div>
+        </div>
+        <div class="podium-item">
+          <div class="podium-avatar">🔥</div>
+          <div class="podium-name">Thomas R.</div>
+          <div class="podium-pts">3 450 pts</div>
+          <div class="podium-plinth">1</div>
+        </div>
+        <div class="podium-item">
+          <div class="podium-avatar">⭐</div>
+          <div class="podium-name">Sarah K.</div>
+          <div class="podium-pts">2 560 pts</div>
+          <div class="podium-plinth">3</div>
+        </div>
+      </div>
+
+      <!-- Leaderboard -->
+      <div class="card">
+        <div class="card-title">📊 Classement Complet</div>
+
+        <div class="rank-row">
+          <div class="rank-pos">4</div>
+          <div class="rank-avatar">💪</div>
+          <div class="rank-name">Karim B.</div>
+          <div class="rank-pts">2 310 pts</div>
+        </div>
+        <div class="rank-row">
+          <div class="rank-pos">5</div>
+          <div class="rank-avatar">🎯</div>
+          <div class="rank-name">Nadia M.</div>
+          <div class="rank-pts">2 180 pts</div>
+        </div>
+        <div class="rank-row">
+          <div class="rank-pos">6</div>
+          <div class="rank-avatar">🚀</div>
+          <div class="rank-name">Luc P.</div>
+          <div class="rank-pts">1 980 pts</div>
+        </div>
+        <div class="rank-row">
+          <div class="rank-pos">7</div>
+          <div class="rank-avatar">🛡️</div>
+          <div class="rank-name">Fatima O.</div>
+          <div class="rank-pts">1 710 pts</div>
+        </div>
+        <div class="rank-row me">
+          <div class="rank-pos" style="color:var(--accent-primary)">8</div>
+          <div class="rank-avatar" style="border-color:var(--accent-primary);">🦺</div>
+          <div class="rank-name" style="color:var(--accent-primary)">Jérôme D. (Moi)</div>
+          <div class="rank-pts">1 240 pts</div>
+        </div>
+        <div class="rank-row">
+          <div class="rank-pos">9</div>
+          <div class="rank-avatar">🌟</div>
+          <div class="rank-name">Paul V.</div>
+          <div class="rank-pts">1 100 pts</div>
+        </div>
+        <div class="rank-row">
+          <div class="rank-pos">10</div>
+          <div class="rank-avatar">🎖️</div>
+          <div class="rank-name">Inès L.</div>
+          <div class="rank-pts">990 pts</div>
+        </div>
+
+      </div>
+
+      <div class="coming-soon">
+        <div class="coming-soon-icon">📡</div>
+        <div class="coming-soon-label">Session S-13</div>
+        <div class="coming-soon-text">Classement temps réel · Filtres période · Google Sheets sync</div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ── NAVBAR ─────────────────────────────────────────────────────── -->
+  <nav id="navbar">
+    <button class="nav-item active" onclick="navigate('hero',this)" data-screen="hero">
+      <span class="nav-icon">🦺</span>
+      <span class="nav-label">Héros</span>
+    </button>
+    <button class="nav-item" onclick="navigate('profil',this)" data-screen="profil">
+      <span class="nav-icon">👤</span>
+      <span class="nav-label">Profil</span>
+    </button>
+    <button class="nav-item" onclick="navigate('quetes',this)" data-screen="quetes">
+      <span class="nav-icon">⚔️</span>
+      <span class="nav-label">Quêtes</span>
+      <span class="nav-badge">3</span>
+    </button>
+    <button class="nav-item nav-signal" onclick="navigate('signaler',this)" data-screen="signaler">
+      <div class="nav-icon-wrap">
+        <span class="nav-icon">🚨</span>
+      </div>
+      <span class="nav-label">Signaler</span>
+    </button>
+    <button class="nav-item" onclick="navigate('defi',this)" data-screen="defi">
+      <span class="nav-icon">🧠</span>
+      <span class="nav-label">Défi</span>
+    </button>
+    <button class="nav-item" onclick="navigate('rang',this)" data-screen="rang">
+      <span class="nav-icon">🏆</span>
+      <span class="nav-label">Rang</span>
+    </button>
+  </nav>
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+  /* ── NAVIGATION ───────────────────────────────────── */
+  function navigate(screenId, el) {
+    // Screens
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const target = document.getElementById('screen-' + screenId);
+    if (target) {
+      target.classList.add('active');
+      document.getElementById('screens').scrollTop = 0;
+    }
+    // Nav items
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    if (el) el.classList.add('active');
+  }
+
+  /* ── QUEST TABS ───────────────────────────────────── */
+  function switchQuestTab(el, tab) {
+    document.querySelectorAll('.quest-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    ['actives','terminees','toutes'].forEach(t => {
+      const el = document.getElementById('quests-' + t);
+      if (el) el.style.display = (t === tab) ? 'block' : 'none';
+    });
+  }
+
+  /* ── TOAST ────────────────────────────────────────── */
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  /* ── CHALLENGE COUNTDOWN ──────────────────────────── */
+  let countdown = 2 * 3600 + 34 * 60 + 17;
+  function tickTimer() {
+    if (countdown <= 0) return;
+    countdown--;
+    const h = String(Math.floor(countdown / 3600)).padStart(2,'0');
+    const m = String(Math.floor((countdown % 3600) / 60)).padStart(2,'0');
+    const s = String(countdown % 60).padStart(2,'0');
+    const th = document.getElementById('t-h');
+    const tm = document.getElementById('t-m');
+    const ts = document.getElementById('t-s');
+    if (th) th.textContent = h;
+    if (tm) tm.textContent = m;
+    if (ts) ts.textContent = s;
+  }
+  setInterval(tickTimer, 1000);
+
+  /* ── XP BAR ANIMATION ON LOAD ─────────────────────── */
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const fill = document.getElementById('xp-fill');
+      if (fill) fill.style.width = '36%';
+    }, 300);
+  });
+
+  /* ── PREVENT SCROLL BOUNCE ────────────────────────── */
+  document.body.addEventListener('touchmove', (e) => {
+    const target = e.target.closest('#screens');
+    if (!target) e.preventDefault();
+  }, { passive: false });
+</script>
+
+</body>
+</html>
