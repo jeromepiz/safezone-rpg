@@ -1807,6 +1807,23 @@
 <!-- Toast -->
 <div id="toast"></div>
 
+ const API_URL = "https://script.google.com/macros/s/TON_ID/exec";
+
+// Exemple d'appel GET
+async function getJoueur(userId) {
+  const res = await fetch(`${API_URL}?action=getJoueur&userId=${userId}`);
+  const json = await res.json();
+  return json.ok ? json.data : null;
+}
+
+// Exemple d'appel POST
+async function createSignalement(data) {
+  const res = await fetch(API_URL, {
+    method: "POST",
+    body: JSON.stringify({ action: "createSignalement", signalement: data })
+  });
+  return await res.json();
+} 
 <script>
   /* ── NAVIGATION ───────────────────────────────────── */
   function navigate(screenId, el) {
