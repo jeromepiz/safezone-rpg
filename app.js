@@ -1482,7 +1482,7 @@ const _origNavigateRef = window.navigate || function(){};
 ═══════════════════════════════════════════════════════ */
 
 /* ── Config PIN (à changer avant le lancement !) ────── */
-const QSE_PIN = '1234';  // ← Change ce code avant le lancement !
+const QSE_PIN = '1909';  // ← Change ce code avant le lancement !
 
 /* ── Triple tap détection ───────────────────────────── */
 let qseTapCount = 0;
