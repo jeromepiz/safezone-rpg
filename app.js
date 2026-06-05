@@ -1236,3 +1236,241 @@ function checkDailyConnexion() {
   }
   saveStats(stats);
 }
+
+/* ═══════════════════════════════════════════════════════
+   S-10 — SIGNALEMENT FLASH
+   Formulaire complet : description, localisation GPS,
+   photo, priorité → envoi vers Google Sheets API S-03
+═══════════════════════════════════════════════════════ */
+
+/* ── Config XP par catégorie ────────────────────────── */
+const SIGNAL_CONFIG = {
+  urgence:        { label: '🚨 URGENCE / ACCIDENT', xp: 100, priorite: 'critique' },
+  danger:         { label: '⚠️ Situation Dangereuse', xp: 75,  priorite: 'haute' },
+  equipement:     { label: '🔧 Équipement Défectueux', xp: 50, priorite: 'normale' },
+  presqueaccident:{ label: '💡 Presque-Accident',     xp: 60,  priorite: 'haute' },
+  bonnepratique:  { label: '👍 Bonne Pratique',       xp: 30,  priorite: 'normale' },
+};
+
+/* ── État formulaire ────────────────────────────────── */
+let signalState = {
+  categorie: '',
+  priorite:  'normale',
+  photoData:  null,
+};
+
+/* ── Ouvrir le formulaire ───────────────────────────── */
+function openSignalForm(categorie) {
+  signalState = { categorie, priorite: 'normale', photoData: null };
+  const cfg = SIGNAL_CONFIG[categorie] || SIGNAL_CONFIG.danger;
+
+  // Reset form
+  document.getElementById('signal-desc').value = '';
+  document.getElementById('signal-loc').value  = '';
+  document.getElementById('signal-char-val').textContent = '0';
+  document.getElementById('signal-geo-status').textContent = '';
+  document.getElementById('signal-photo-preview').style.display = 'none';
+  document.getElementById('signal-photo-placeholder').style.display = 'flex';
+  document.getElementById('signal-photo-zone').classList.remove('has-photo');
+  document.querySelectorAll('.signal-priority-btn').forEach(function(b) {
+    b.classList.remove('active');
+    if (b.dataset.priority === cfg.priorite) b.classList.add('active');
+  });
+  signalState.priorite = cfg.priorite;
+
+  // Header
+  document.getElementById('signal-form-title').textContent = cfg.label;
+  document.getElementById('signal-form-xp').textContent    = '+' + cfg.xp + ' XP';
+
+  showSignalView('form');
+}
+
+function closeSignalForm() {
+  showSignalView('home');
+  renderRecentSignalements();
+}
+
+function closeSignalConfirm() {
+  showSignalView('home');
+  renderRecentSignalements();
+}
+
+function showSignalView(view) {
+  document.getElementById('signal-home').style.display    = view === 'home'    ? 'block' : 'none';
+  document.getElementById('signal-form').style.display    = view === 'form'    ? 'block' : 'none';
+  document.getElementById('signal-confirm').style.display = view === 'confirm' ? 'block' : 'none';
+}
+
+/* ── Compteur caractères ────────────────────────────── */
+function updateCharCount(textarea) {
+  document.getElementById('signal-char-val').textContent = textarea.value.length;
+}
+
+/* ── Géolocalisation ────────────────────────────────── */
+function getGeolocation() {
+  const statusEl = document.getElementById('signal-geo-status');
+  const locInput = document.getElementById('signal-loc');
+  if (!navigator.geolocation) {
+    statusEl.textContent = '❌ Géolocalisation non disponible';
+    return;
+  }
+  statusEl.textContent = '📡 Localisation en cours…';
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      const lat = pos.coords.latitude.toFixed(5);
+      const lng = pos.coords.longitude.toFixed(5);
+      locInput.value = 'GPS: ' + lat + ', ' + lng;
+      statusEl.textContent = '✅ Position GPS récupérée';
+      setTimeout(function(){ statusEl.textContent = ''; }, 3000);
+    },
+    function(err) {
+      statusEl.textContent = '⚠️ ' + (err.message || 'Position indisponible');
+    },
+    { timeout: 10000, maximumAge: 60000 }
+  );
+}
+
+/* ── Photo ──────────────────────────────────────────── */
+function triggerPhoto() {
+  document.getElementById('signal-photo-input').click();
+}
+
+function handlePhotoSelect(input) {
+  if (!input.files || !input.files[0]) return;
+  const file   = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    signalState.photoData = e.target.result;
+    const preview = document.getElementById('signal-photo-preview');
+    const placeholder = document.getElementById('signal-photo-placeholder');
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+    placeholder.style.display = 'none';
+    document.getElementById('signal-photo-zone').classList.add('has-photo');
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ── Priorité ───────────────────────────────────────── */
+function selectPriority(btn, priorite) {
+  signalState.priorite = priorite;
+  document.querySelectorAll('.signal-priority-btn').forEach(function(b) {
+    b.classList.remove('active');
+  });
+  btn.classList.add('active');
+}
+
+/* ── Soumettre le signalement ───────────────────────── */
+async function submitSignalement() {
+  const desc = document.getElementById('signal-desc').value.trim();
+  if (!desc || desc.length < 10) {
+    showToast('✏️ Décris la situation (min. 10 caractères)');
+    return;
+  }
+
+  const btn = document.getElementById('signal-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Envoi en cours…';
+
+  const cfg = SIGNAL_CONFIG[signalState.categorie] || SIGNAL_CONFIG.danger;
+  const loc = document.getElementById('signal-loc').value.trim();
+
+  const signalement = {
+    userId:       PROFILE.userId,
+    pseudo:       PROFILE.pseudo,
+    categorie:    cfg.label,
+    description:  desc,
+    localisation: loc,
+    photo:        signalState.photoData ? '📷 Photo jointe' : '',
+    priorite:     signalState.priorite,
+  };
+
+  const result = await apiPost({ action: 'createSignalement', signalement });
+
+  btn.disabled = false;
+  btn.textContent = '🚀 Envoyer le Signalement';
+
+  if (result) {
+    // XP gagné
+    const xpGagne = cfg.xp;
+    PROFILE.xp    += xpGagne;
+    PROFILE.niveau = calcNiveau(PROFILE.xp);
+    saveProfile(PROFILE);
+
+    // Stats
+    const stats = getStats();
+    stats.signalementsTotal    = (stats.signalementsTotal || 0) + 1;
+    stats.signalementsSemaine  = (stats.signalementsSemaine || 0) + 1;
+    saveStats(stats);
+
+    // Sauvegarde locale du signalement
+    saveSignalementLocal({
+      sigId:        result.sigId,
+      categorie:    cfg.label,
+      description:  desc,
+      localisation: loc,
+      priorite:     signalState.priorite,
+      statut:       'nouveau',
+      date:         new Date().toISOString(),
+      xpGagne,
+    });
+
+    refreshUI();
+    checkBadges();
+    checkQuetes();
+    syncToSheets();
+
+    // Écran confirmation
+    document.getElementById('signal-confirm-xp').textContent = '+' + xpGagne + ' XP';
+    showSignalView('confirm');
+  } else {
+    showToast('⚠️ Erreur réseau. Vérifie ta connexion et réessaie.');
+  }
+}
+
+/* ── Signalements locaux ────────────────────────────── */
+function saveSignalementLocal(sig) {
+  try {
+    const list = JSON.parse(localStorage.getItem('safezone_signalements') || '[]');
+    list.unshift(sig);
+    // Garder les 20 derniers
+    localStorage.setItem('safezone_signalements', JSON.stringify(list.slice(0, 20)));
+  } catch(e) {}
+}
+
+function getSignalementsLocaux() {
+  try { return JSON.parse(localStorage.getItem('safezone_signalements') || '[]'); }
+  catch(e) { return []; }
+}
+
+/* ── Rendu liste récente ────────────────────────────── */
+function renderRecentSignalements() {
+  const list   = getSignalementsLocaux();
+  const el     = document.getElementById('signal-recent-list');
+  if (!el) return;
+
+  if (list.length === 0) {
+    el.innerHTML = '<div class="empty-state" style="padding:20px 0;">'
+      + '<div class="empty-icon" style="font-size:32px;">📭</div>'
+      + '<div class="empty-text">Aucun signalement pour l\'instant</div></div>';
+    return;
+  }
+
+  const icons = { urgence:'🚨', danger:'⚠️', equipement:'🔧', presqueaccident:'💡', bonnepratique:'👍' };
+
+  el.innerHTML = list.slice(0, 5).map(function(s) {
+    const date = new Date(s.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+    const statusClass = 'status-' + (s.statut || 'nouveau');
+    return '<div class="signal-recent-item">'
+      + '<div class="signal-recent-icon">⚠️</div>'
+      + '<div class="signal-recent-body">'
+      +   '<div class="signal-recent-desc">' + s.description.slice(0, 60) + (s.description.length > 60 ? '…' : '') + '</div>'
+      +   '<div class="signal-recent-meta">' + date + ' · +' + s.xpGagne + ' XP</div>'
+      + '</div>'
+      + '<span class="signal-recent-status ' + statusClass + '">' + (s.statut || 'nouveau') + '</span>'
+      + '</div>';
+  }).join('');
+}
+
+// Init au navigate vers signaler
+const _origNavigateRef = window.navigate || function(){};
