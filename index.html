@@ -916,6 +916,37 @@
     .quiz-result-bar { height: 10px; background: var(--bg-elevated); border-radius: 5px; overflow: hidden; }
     .quiz-result-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-primary), var(--accent-success)); border-radius: 5px; transition: width 1s ease; }
 
+
+    /* ═══════════════ S-09 : MOTEUR QUÊTES ═══════════════ */
+    .quest-card-locked {
+      opacity: 0.45; filter: grayscale(0.5);
+    }
+    .quest-xp-reward {
+      display: flex; align-items: center; gap: 4px;
+      font-family: var(--font-mono); font-size: 12px;
+      color: var(--accent-secondary);
+      background: rgba(247,197,32,0.08);
+      padding: 3px 10px; border-radius: 12px;
+      border: 1px solid rgba(247,197,32,0.2);
+    }
+    .quest-claim-btn {
+      background: linear-gradient(135deg, var(--accent-secondary), #c9a000);
+      color: #0b1219; border: none; border-radius: var(--radius-sm);
+      padding: 6px 14px; font-family: var(--font-display);
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: all 0.15s; letter-spacing: 0.5px;
+    }
+    .quest-claim-btn:active { transform: scale(0.95); }
+    .quest-progress-label {
+      font-size: 11px; color: var(--text-muted); margin-bottom: 4px;
+      display: flex; justify-content: space-between;
+    }
+    .quest-type-daily   { border-left: 3px solid var(--accent-primary); }
+    .quest-type-weekly  { border-left: 3px solid var(--accent-secondary); }
+    .quest-type-epic    { border-left: 3px solid var(--accent-purple); }
+    .quest-type-special { border-left: 3px solid var(--accent-success); }
+
   </style>
 </head>
 <body>
@@ -1065,57 +1096,41 @@
       <div class="screen-header">
         <div class="screen-eyebrow">Objectifs</div>
         <div class="screen-title">Mes <span>Quêtes</span></div>
-        <div class="screen-subtitle">3 quêtes actives · 2 terminées</div>
+        <div class="screen-subtitle" id="quetes-subtitle">Chargement…</div>
       </div>
+
+      <!-- Tabs -->
       <div class="quest-tabs">
         <button class="quest-tab active" onclick="switchQuestTab(this,'actives')">⚔️ Actives</button>
         <button class="quest-tab" onclick="switchQuestTab(this,'terminees')">✅ Terminées</button>
-        <button class="quest-tab" onclick="switchQuestTab(this,'toutes')">📋 Toutes</button>
+        <button class="quest-tab" onclick="switchQuestTab(this,'toutes')">📋 Catalogue</button>
       </div>
+
+      <!-- Actives -->
       <div id="quests-actives">
-        <div class="quest-card">
-          <div class="quest-card-accent gold"></div>
-          <div class="quest-header"><div class="quest-name">🏆 Maître des EPI</div><span class="badge badge-gold">ÉPIQUE</span></div>
-          <div class="quest-desc">Compléter 5 quiz sur les Équipements de Protection Individuelle avec un score > 80%.</div>
-          <div class="progress-bar" style="margin-bottom:6px;"><div class="progress-fill gold" style="width:60%"></div></div>
-          <div class="quest-footer"><span style="font-size:11px;color:var(--text-muted)">3 / 5 complétés</span><div class="quest-reward">💎 +300 pts</div></div>
-        </div>
-        <div class="quest-card">
-          <div class="quest-card-accent cyan"></div>
-          <div class="quest-header"><div class="quest-name">👁️ Œil du Guetteur</div><span class="badge badge-cyan">NORMAL</span></div>
-          <div class="quest-desc">Signaler 3 situations à risque validées par le service QSE.</div>
-          <div class="progress-bar" style="margin-bottom:6px;"><div class="progress-fill cyan" style="width:33%"></div></div>
-          <div class="quest-footer"><span style="font-size:11px;color:var(--text-muted)">1 / 3 signalés</span><div class="quest-reward">💎 +150 pts</div></div>
-        </div>
-        <div class="quest-card">
-          <div class="quest-card-accent purple"></div>
-          <div class="quest-header"><div class="quest-name">🔥 Série Parfaite</div><span class="badge badge-purple">RARE</span></div>
-          <div class="quest-desc">Se connecter et réaliser une action sécurité 7 jours consécutifs.</div>
-          <div class="progress-bar" style="margin-bottom:6px;"><div class="progress-fill purple" style="width:57%"></div></div>
-          <div class="quest-footer"><span style="font-size:11px;color:var(--text-muted)">4 / 7 jours</span><div class="quest-reward">💎 +250 pts</div></div>
+        <div id="quests-actives-list"></div>
+        <div id="quests-actives-empty" class="empty-state" style="display:none">
+          <div class="empty-icon">⚔️</div>
+          <div class="empty-title">Aucune quête active</div>
+          <div class="empty-text">Toutes tes quêtes sont terminées !<br>Reviens demain pour de nouveaux défis.</div>
         </div>
       </div>
+
+      <!-- Terminées -->
       <div id="quests-terminees" style="display:none">
-        <div class="quest-card" style="opacity:0.65;">
-          <div class="quest-card-accent green"></div>
-          <div class="quest-header"><div class="quest-name">🎓 Première Formation</div><span class="badge badge-green">TERMINÉ</span></div>
-          <div class="quest-desc">Compléter votre premier module de formation en ligne.</div>
-          <div class="quest-footer"><span style="font-size:11px;color:var(--text-muted)">Complété le 15 Jan.</span><div class="quest-reward" style="color:var(--accent-success)">✅ +100 pts</div></div>
-        </div>
-        <div class="quest-card" style="opacity:0.65;">
-          <div class="quest-card-accent green"></div>
-          <div class="quest-header"><div class="quest-name">👋 Bienvenue Agent</div><span class="badge badge-green">TERMINÉ</span></div>
-          <div class="quest-desc">Créer votre profil SafeZone RPG et personnaliser votre avatar.</div>
-          <div class="quest-footer"><span style="font-size:11px;color:var(--text-muted)">Complété le 3 Jan.</span><div class="quest-reward" style="color:var(--accent-success)">✅ +50 pts</div></div>
+        <div id="quests-terminees-list"></div>
+        <div id="quests-terminees-empty" class="empty-state" style="display:none">
+          <div class="empty-icon">🎯</div>
+          <div class="empty-title">Aucune quête terminée</div>
+          <div class="empty-text">Complète tes premières quêtes pour les voir apparaître ici.</div>
         </div>
       </div>
+
+      <!-- Catalogue complet -->
       <div id="quests-toutes" style="display:none">
-        <div class="coming-soon">
-          <div class="coming-soon-icon">📋</div>
-          <div class="coming-soon-label">Session S-09</div>
-          <div class="coming-soon-text">Catalogue complet des quêtes · Moteur de quêtes dynamiques</div>
-        </div>
+        <div id="quests-catalogue-list"></div>
       </div>
+
     </section>
 
     <!-- ── DÉFI ─────────────────────────────────────────── -->
@@ -1279,7 +1294,7 @@
   <nav id="navbar">
     <button class="nav-item active" onclick="navigate('hero',this)" data-screen="hero"><span class="nav-icon">🦺</span><span class="nav-label">Héros</span></button>
     <button class="nav-item" onclick="navigate('profil',this)" data-screen="profil"><span class="nav-icon">👤</span><span class="nav-label">Profil</span></button>
-    <button class="nav-item" onclick="navigate('quetes',this)" data-screen="quetes"><span class="nav-icon">⚔️</span><span class="nav-label">Quêtes</span><span class="nav-badge">3</span></button>
+    <button class="nav-item" onclick="navigate('quetes',this);renderQuetes();" data-screen="quetes"><span class="nav-icon">⚔️</span><span class="nav-label">Quêtes</span><span class="nav-badge">3</span></button>
     <button class="nav-item nav-signal" onclick="navigate('signaler',this)" data-screen="signaler"><div class="nav-icon-wrap"><span class="nav-icon">🚨</span></div><span class="nav-label">Signaler</span></button>
     <button class="nav-item" onclick="navigate('defi',this);showQuizView('home');updateQuizHomeStats();" data-screen="defi"><span class="nav-icon">🧠</span><span class="nav-label">Défi</span></button>
     <button class="nav-item" onclick="navigate('rang',this)" data-screen="rang"><span class="nav-icon">🏆</span><span class="nav-label">Rang</span></button>
