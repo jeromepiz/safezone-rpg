@@ -712,6 +712,46 @@
       object-fit: contain; object-position: bottom center;
     }
 
+
+    /* ── S-05 : Sync indicator ── */
+    .sync-dot {
+      font-size: 11px; line-height: 1; cursor: default;
+      transition: opacity 0.3s;
+    }
+    .sync-syncing { opacity: 0.6; animation: spin-slow 2s linear infinite; }
+    .sync-ok      { opacity: 0.7; }
+    .sync-error   { opacity: 1; color: var(--accent-danger); }
+    .sync-offline { opacity: 0.5; }
+    @keyframes spin-slow { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+    /* ── S-05 : Level-up popup ── */
+    #levelup-popup {
+      position: fixed; inset: 0; z-index: 9500;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+      animation: overlay-in 0.3s ease both;
+    }
+    #levelup-popup.hidden { display: none; }
+    .levelup-card {
+      background: linear-gradient(135deg, #1a0a2e, #0e2436);
+      border: 2px solid var(--accent-secondary);
+      border-radius: var(--radius-xl); padding: 36px 40px;
+      text-align: center; box-shadow: var(--glow-gold), 0 32px 64px rgba(0,0,0,0.7);
+      animation: xp-pop-in 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+    .levelup-icon  { font-size: 64px; margin-bottom: 8px; animation: gem-float 2s ease-in-out infinite; }
+    .levelup-label { font-family: var(--font-mono); font-size: 11px; color: var(--accent-secondary); letter-spacing: 3px; text-transform: uppercase; }
+    .levelup-num   { font-family: var(--font-display); font-size: 72px; font-weight: 800; color: var(--accent-secondary); line-height: 1; filter: drop-shadow(var(--glow-gold)); }
+    .levelup-title { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--text-primary); margin-top: 4px; }
+    .levelup-sub   { font-size: 13px; color: var(--text-secondary); margin-top: 8px; }
+
+    /* ── S-05 : profil last sync ── */
+    .profile-sync-row {
+      display: flex; align-items: center; justify-content: center;
+      gap: 6px; margin-top: 6px;
+      font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+    }
+
   </style>
 </head>
 <body>
@@ -743,6 +783,7 @@
       <div class="points-gem">💎</div>
       <div class="points-val" id="pts-val">0</div>
       <div class="points-lbl">Points</div>
+      <div id="sync-indicator" class="sync-dot sync-ok" title="Synchronisé">☁️</div>
     </div>
   </header>
 
@@ -827,6 +868,7 @@
           </div>
           <div class="profile-name" id="profile-name">Mon Héros</div>
           <div class="profile-role" id="profile-class">⚡ Recrue · Niveau 1</div>
+          <div class="profile-sync-row"><span id="profile-last-sync">☁️ Pas encore synchronisé</span></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px;">
             <span class="badge badge-cyan">🏢 Valence</span>
             <span class="badge badge-gold" id="profile-pts-badge">💎 0 pts</span>
@@ -1088,6 +1130,18 @@
   <div class="xp-popup-sub">Ton profil héros est prêt</div>
 </div>
 
+
+
+<!-- S-05 : Level-up popup -->
+<div id="levelup-popup" class="hidden">
+  <div class="levelup-card">
+    <div class="levelup-icon">⬆️</div>
+    <div class="levelup-label">Niveau atteint</div>
+    <div class="levelup-num">2</div>
+    <div class="levelup-title">Tu montes en grade !</div>
+    <div class="levelup-sub">Continue comme ça pour débloquer de nouveaux personnages</div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>
