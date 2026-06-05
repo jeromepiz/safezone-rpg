@@ -582,6 +582,10 @@ window.addEventListener('load', async function() {
     setTimeout(openAvatarCreator, 600);
   }
 
+  // S-06 : vérification badges au démarrage
+  PROFILE.badges = PROFILE.badges || [];
+  checkBadges();
+
   const frame = document.getElementById('avatar-preview-frame');
   if (frame) frame.addEventListener('click', function(){
     const imgEl = document.getElementById('avatar-preview-img');
