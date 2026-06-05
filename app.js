@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   SafeZone RPG — app.js  (S-04 avec images personnages)
+   SafeZone RPG — app.js  (S-05 : Sauvegarde profil + XP)
 ═══════════════════════════════════════════════════════ */
 
 /* ── API S-03 ───────────────────────────────────────── */
@@ -21,13 +21,126 @@ async function apiPost(body) {
   } catch(e) { return null; }
 }
 
+/* ═══════════════════════════════════════════════════════
+   S-05 — SYNC GOOGLE SHEETS
+   Stratégie : localStorage = source de vérité locale
+               Google Sheets = sauvegarde cloud + classement
+   Sync : au login, à chaque gain XP, à chaque modif profil
+═══════════════════════════════════════════════════════ */
+
+// Indique si une synchro est en cours (évite les doublons)
+let syncInProgress = false;
+let syncPending    = false;
+
+// Synchro complète du profil vers Sheets
+async function syncToSheets(silent = true) {
+  if (syncInProgress) { syncPending = true; return; }
+  syncInProgress = true;
+  setSyncIndicator('syncing');
+  try {
+    const data = await apiPost({
+      action: 'upsertJoueur',
+      joueur: {
+        userId:          PROFILE.userId,
+        pseudo:          PROFILE.pseudo,
+        avatar:          PROFILE.avatarId || 'recrue',
+        xp:              PROFILE.xp,
+        niveau:          PROFILE.niveau,
+        badges:          PROFILE.badges,
+        quetes:          PROFILE.quetes,
+        color:           PROFILE.color,
+        classe:          PROFILE.classe,
+        dateInscription: PROFILE.dateInscription,
+      }
+    });
+    if (data) {
+      PROFILE.lastSync = new Date().toISOString();
+      saveProfile(PROFILE);
+      setSyncIndicator('ok');
+      if (!silent) showToast('☁️ Profil synchronisé !');
+    } else {
+      setSyncIndicator('error');
+    }
+  } catch(e) {
+    setSyncIndicator('error');
+  }
+  syncInProgress = false;
+  if (syncPending) { syncPending = false; syncToSheets(silent); }
+}
+
+// Chargement du profil depuis Sheets au démarrage
+async function loadFromSheets() {
+  if (!PROFILE.userId) return;
+  setSyncIndicator('syncing');
+  const data = await apiGet({ action: 'getJoueur', userId: PROFILE.userId });
+  if (data) {
+    // Fusion : on garde le max XP (évite de perdre des points gagnés hors ligne)
+    const xpFinal    = Math.max(PROFILE.xp, data.xp || 0);
+    const niveauFinal = calcNiveau(xpFinal);
+    PROFILE = {
+      ...PROFILE,
+      pseudo:  data.pseudo  || PROFILE.pseudo,
+      avatar:  data.avatar  ? ('avatars/' + data.avatar + '.png') : PROFILE.avatar,
+      avatarId: data.avatar || PROFILE.avatarId,
+      xp:      xpFinal,
+      niveau:  niveauFinal,
+      badges:  data.badges  || PROFILE.badges,
+      quetes:  data.quetes  || PROFILE.quetes,
+      lastSync: new Date().toISOString(),
+    };
+    saveProfile(PROFILE);
+    refreshUI();
+    setSyncIndicator('ok');
+  } else {
+    setSyncIndicator('error');
+    // Mode hors-ligne : on continue avec localStorage
+  }
+}
+
+// Gain d'XP avec sync automatique
+async function gainXP(montant, raison) {
+  PROFILE.xp += montant;
+  const niveauAvant  = PROFILE.niveau;
+  PROFILE.niveau     = calcNiveau(PROFILE.xp);
+  saveProfile(PROFILE);
+  refreshUI();
+  // XP sur Sheets (non bloquant)
+  apiPost({ action:'addXP', userId:PROFILE.userId, xp:montant, raison:raison }).catch(()=>{});
+  // Level up ?
+  if (PROFILE.niveau > niveauAvant) {
+    showLevelUp(PROFILE.niveau);
+    syncToSheets();
+  }
+  showXpPopup(montant, raison || 'XP gagné !');
+}
+
+// Indicateur de sync dans la topbar
+function setSyncIndicator(state) {
+  const el = document.getElementById('sync-indicator');
+  if (!el) return;
+  const icons = { syncing:'⏳', ok:'☁️', error:'⚠️', offline:'📴' };
+  el.textContent = icons[state] || '';
+  el.title = { syncing:'Synchronisation…', ok:'Synchronisé', error:'Hors ligne', offline:'Sans connexion' }[state] || '';
+  el.className = 'sync-dot sync-' + state;
+}
+
+// Level up popup
+function showLevelUp(niveau) {
+  const popup = document.getElementById('levelup-popup');
+  if (!popup) return;
+  popup.querySelector('.levelup-num').textContent = niveau;
+  popup.classList.remove('hidden');
+  setTimeout(() => popup.classList.add('hidden'), 3500);
+}
+
 /* ── PROFIL LOCAL ───────────────────────────────────── */
 const DEFAULT_PROFILE = {
   userId:   'local_' + Math.random().toString(36).slice(2,10),
   pseudo:   '', avatar: 'avatars/recrue.png', avatarId: 'recrue',
   color:    '#00d4ff', classe: 'recrue',
   xp: 0, niveau: 1, badges: [], quetes: [],
-  dateInscription: new Date().toISOString()
+  dateInscription: new Date().toISOString(),
+  lastSync: null,
 };
 function loadProfile() {
   try { const r=localStorage.getItem('safezone_profile'); return r?{...DEFAULT_PROFILE,...JSON.parse(r)}:{...DEFAULT_PROFILE}; }
@@ -46,21 +159,21 @@ const AVATARS = [
   {id:'champion',   img:'avatars/champion.png',   label:'Champion',   unlock:6000},
 ];
 const COLORS = [
-  {value:'#00d4ff',label:'Cyan',   style:'background:#00d4ff'},
-  {value:'#f7c520',label:'Or',     style:'background:#f7c520'},
-  {value:'#2ed573',label:'Vert',   style:'background:#2ed573'},
-  {value:'#ff4757',label:'Rouge',  style:'background:#ff4757'},
-  {value:'#a855f7',label:'Violet', style:'background:#a855f7'},
-  {value:'#ff6b35',label:'Orange', style:'background:#ff6b35'},
-  {value:'#e8f4fd',label:'Blanc',  style:'background:#e8f4fd'},
-  {value:'#40e0d0',label:'Turquoise',style:'background:linear-gradient(135deg,#40e0d0,#00c9ff)'},
+  {value:'#00d4ff',label:'Cyan',      style:'background:#00d4ff'},
+  {value:'#f7c520',label:'Or',        style:'background:#f7c520'},
+  {value:'#2ed573',label:'Vert',      style:'background:#2ed573'},
+  {value:'#ff4757',label:'Rouge',     style:'background:#ff4757'},
+  {value:'#a855f7',label:'Violet',    style:'background:#a855f7'},
+  {value:'#ff6b35',label:'Orange',    style:'background:#ff6b35'},
+  {value:'#e8f4fd',label:'Blanc',     style:'background:#e8f4fd'},
+  {value:'#40e0d0',label:'Turquoise', style:'background:linear-gradient(135deg,#40e0d0,#00c9ff)'},
 ];
 const CLASSES = [
-  {id:'recrue',    icon:'⚡',label:'Recrue',          desc:'Tu commences ton aventure sécurité',          req:'Disponible dès le départ', unlock:0},
-  {id:'sentinelle',icon:'👁️',label:'Sentinelle',      desc:'Tu surveilles et signales les risques',         req:'Niveau 2 requis (100 XP)', unlock:100},
-  {id:'gardien',   icon:'🛡️',label:'Gardien',         desc:'Tu maîtrises les procédures de sécurité',      req:'Niveau 4 requis (300 XP)', unlock:300},
-  {id:'expert',    icon:'🎯',label:'Expert QSE',       desc:'Tu es une référence pour ton équipe',          req:'Niveau 6 requis (1000 XP)',unlock:1000},
-  {id:'champion',  icon:'🏆',label:'Champion SafeZone',desc:'Le titre ultime. Légende de l\'agence.',       req:'Niveau 10 requis (6000 XP)',unlock:6000},
+  {id:'recrue',    icon:'⚡', label:'Recrue',           desc:'Tu commences ton aventure sécurité',       req:'Disponible dès le départ',  unlock:0},
+  {id:'sentinelle',icon:'👁️', label:'Sentinelle',       desc:'Tu surveilles et signales les risques',    req:'Niveau 2 requis (100 XP)',   unlock:100},
+  {id:'gardien',   icon:'🛡️', label:'Gardien',          desc:'Tu maîtrises les procédures de sécurité', req:'Niveau 4 requis (300 XP)',   unlock:300},
+  {id:'expert',    icon:'🎯', label:'Expert QSE',        desc:'Tu es une référence pour ton équipe',     req:'Niveau 6 requis (1000 XP)',  unlock:1000},
+  {id:'champion',  icon:'🏆', label:'Champion SafeZone', desc:'Le titre ultime. Légende de l\'agence.',  req:'Niveau 10 requis (6000 XP)', unlock:6000},
 ];
 
 /* ── AVATAR CREATOR STATE ───────────────────────────── */
@@ -194,11 +307,12 @@ async function saveAvatar() {
   PROFILE.classe   = tempAvatar.classe;
   if (isFirstTime) { PROFILE.xp += 25; PROFILE.niveau = calcNiveau(PROFILE.xp); }
   saveProfile(PROFILE);
-  apiPost({action:'upsertJoueur',joueur:{userId:PROFILE.userId,pseudo:PROFILE.pseudo,avatar:PROFILE.avatar,xp:PROFILE.xp,niveau:PROFILE.niveau}}).catch(function(){});
   refreshUI();
   closeAvatarCreator();
-  if (isFirstTime) showXpPopup(25,'Avatar créé !');
-  else showToast('✅ Avatar mis à jour !');
+  // S-05 : sync immédiate vers Sheets
+  await syncToSheets(false);
+  if (isFirstTime) showXpPopup(25, 'Avatar créé !');
+  else showToast('✅ Avatar sauvegardé !');
   btn.classList.remove('saving'); btn.innerHTML = '💾 Sauvegarder mon Avatar';
 }
 
@@ -208,52 +322,68 @@ function refreshUI() {
   const xpMax = xpForNextLevel(p.niveau);
   const xpPct = Math.min(100, Math.round((p.xp / xpMax) * 100));
   const cl = CLASSES.find(function(c){ return c.id===p.classe; }) || CLASSES[0];
-  const img = '<img src="'+(p.avatar||'avatars/recrue.png')+'" style="width:100%;height:100%;object-fit:contain;" />';
-  const img88 = '<img src="'+(p.avatar||'avatars/recrue.png')+'" style="width:88%;height:88%;object-fit:contain;" />';
+  const img   = '<img src="'+(p.avatar||'avatars/recrue.png')+'" style="width:100%;height:100%;object-fit:contain;object-position:bottom;" />';
+  const img88 = '<img src="'+(p.avatar||'avatars/recrue.png')+'" style="width:88%;height:88%;object-fit:contain;object-position:bottom;" />';
 
-  document.getElementById('topbar-avatar').innerHTML = img;
-  document.getElementById('topbar-name').textContent = p.pseudo || 'Mon Héros';
+  document.getElementById('topbar-avatar').innerHTML  = img;
+  document.getElementById('topbar-name').textContent  = p.pseudo || 'Mon Héros';
   document.getElementById('topbar-level').textContent = 'Nv.'+p.niveau;
-  document.getElementById('xp-fill').style.width = xpPct+'%';
-  document.getElementById('xp-text').textContent = p.xp+' / '+xpMax;
-  document.getElementById('pts-val').textContent = p.xp.toLocaleString('fr-FR');
+  document.getElementById('xp-fill').style.width      = xpPct+'%';
+  document.getElementById('xp-text').textContent      = p.xp+' / '+xpMax;
+  document.getElementById('pts-val').textContent      = p.xp.toLocaleString('fr-FR');
 
-  document.getElementById('hero-avatar-big').innerHTML = img;
-  document.getElementById('hero-name').textContent = p.pseudo || 'Mon Héros';
-  document.getElementById('hero-class').textContent = cl.icon+' '+cl.label;
+  document.getElementById('hero-avatar-big').innerHTML  = img;
+  document.getElementById('hero-name').textContent      = p.pseudo || 'Mon Héros';
+  document.getElementById('hero-class').textContent     = cl.icon+' '+cl.label;
   document.getElementById('hero-level-badge').textContent = '🏆 Niveau '+p.niveau;
 
   document.getElementById('profile-avatar-big').innerHTML = img88;
-  document.getElementById('profile-name').textContent = p.pseudo || 'Mon Héros';
-  document.getElementById('profile-class').textContent = cl.icon+' '+cl.label+' · Niveau '+p.niveau;
+  document.getElementById('profile-name').textContent     = p.pseudo || 'Mon Héros';
+  document.getElementById('profile-class').textContent    = cl.icon+' '+cl.label+' · Niveau '+p.niveau;
   document.getElementById('profile-pts-badge').textContent = '💎 '+p.xp.toLocaleString('fr-FR')+' pts';
-  document.getElementById('profile-xp').textContent = p.xp;
-  document.getElementById('profile-pts').textContent = p.xp.toLocaleString('fr-FR');
+  document.getElementById('profile-xp').textContent       = p.xp;
+  document.getElementById('profile-pts').textContent      = p.xp.toLocaleString('fr-FR');
   const since = new Date(p.dateInscription);
   document.getElementById('profile-since').textContent = since.toLocaleDateString('fr-FR',{month:'short',year:'numeric'});
+
+  // Dernière synchro
+  const syncEl = document.getElementById('profile-last-sync');
+  if (syncEl) {
+    syncEl.textContent = p.lastSync
+      ? '☁️ Sync : ' + new Date(p.lastSync).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})
+      : '☁️ Pas encore synchronisé';
+  }
 
   const ring = document.querySelector('.profile-avatar-ring');
   if (ring) ring.style.background = 'conic-gradient('+(p.color||'#00d4ff')+' '+xpPct+'%, #1c2d3e '+xpPct+'%)';
 
-  document.getElementById('rank-my-avatar').innerHTML = img;
-  document.getElementById('rank-my-name').textContent = (p.pseudo||'Mon Héros')+' (Moi)';
-  document.getElementById('rank-my-pts').textContent = p.xp.toLocaleString('fr-FR')+' pts';
+  document.getElementById('rank-my-avatar').innerHTML  = img;
+  document.getElementById('rank-my-name').textContent  = (p.pseudo||'Mon Héros')+' (Moi)';
+  document.getElementById('rank-my-pts').textContent   = p.xp.toLocaleString('fr-FR')+' pts';
+
+  // Stats héros
+  const statRang = document.getElementById('stat-rang');
+  if (statRang) statRang.textContent = '#—';
 
   renderBadges();
 }
 
 function renderBadges() {
   const defs = [
-    {id:'first_avatar',icon:'🎭',label:'Identité', color:'var(--accent-primary)',   ok:function(){return !!PROFILE.pseudo;}},
-    {id:'first_quiz',  icon:'🎯',label:'Précis',   color:'var(--accent-success)',   ok:function(){return false;}},
-    {id:'first_signal',icon:'⚠️',label:'Vigilant', color:'var(--accent-secondary)', ok:function(){return false;}},
-    {id:'level5',      icon:'⭐',label:'Niveau 5', color:'var(--accent-secondary)', ok:function(){return PROFILE.niveau>=5;}},
-    {id:'guardian',    icon:'🛡️',label:'Gardien',  color:'var(--accent-primary)',   ok:function(){return PROFILE.niveau>=4;}},
+    {id:'first_avatar', icon:'🎭', label:'Identité',  color:'var(--accent-primary)',   ok:function(){return !!PROFILE.pseudo;}},
+    {id:'first_quiz',   icon:'🎯', label:'Précis',    color:'var(--accent-success)',   ok:function(){return false;}},
+    {id:'first_signal', icon:'⚠️', label:'Vigilant',  color:'var(--accent-secondary)', ok:function(){return false;}},
+    {id:'level5',       icon:'⭐', label:'Niveau 5',  color:'var(--accent-secondary)', ok:function(){return PROFILE.niveau>=5;}},
+    {id:'guardian',     icon:'🛡️', label:'Gardien',   color:'var(--accent-primary)',   ok:function(){return PROFILE.niveau>=4;}},
   ];
   const unlocked = defs.filter(function(b){return b.ok();});
-  document.getElementById('profile-badges-count').textContent = unlocked.length;
-  document.getElementById('stat-badges').textContent = unlocked.length;
-  document.getElementById('badges-collection').innerHTML = defs.map(function(b){
+  const badgesCount = document.getElementById('profile-badges-count');
+  const statBadges  = document.getElementById('stat-badges');
+  if (badgesCount) badgesCount.textContent = unlocked.length;
+  if (statBadges)  statBadges.textContent  = unlocked.length;
+  const container = document.getElementById('badges-collection');
+  if (!container) return;
+  container.innerHTML = defs.map(function(b){
     const u = b.ok();
     return '<div style="text-align:center;flex:0 0 60px;'+(u?'':'opacity:0.2;')+'">'
       +'<div style="font-size:32px;filter:drop-shadow(0 0 6px '+(u?b.color:'transparent')+')">'+(u?b.icon:'🔒')+'</div>'
@@ -272,10 +402,11 @@ function xpForNextLevel(n) {
   return s[Math.min(n-1,s.length-1)];
 }
 
-/* ── XP POPUP ───────────────────────────────────────── */
+/* ── POPUPS ─────────────────────────────────────────── */
 function showXpPopup(xp, titre) {
   const p = document.getElementById('xp-popup');
-  p.querySelector('.xp-popup-val').textContent = '+'+xp+' XP';
+  if (!p) return;
+  p.querySelector('.xp-popup-val').textContent   = '+'+xp+' XP';
   p.querySelector('.xp-popup-title').textContent = titre||'Bravo !';
   p.classList.remove('hidden');
   setTimeout(function(){p.classList.add('hidden');},2800);
@@ -320,7 +451,7 @@ function tickTimer() {
 setInterval(tickTimer,1000);
 
 /* ── INIT ───────────────────────────────────────────── */
-window.addEventListener('load', function() {
+window.addEventListener('load', async function() {
   refreshUI();
   setTimeout(function(){
     const xpMax = xpForNextLevel(PROFILE.niveau);
@@ -328,12 +459,28 @@ window.addEventListener('load', function() {
     const fill = document.getElementById('xp-fill');
     if(fill) fill.style.width = xpPct+'%';
   },300);
-  if (!PROFILE.pseudo) setTimeout(openAvatarCreator, 600);
+
+  // S-05 : chargement depuis Sheets si déjà inscrit
+  if (PROFILE.pseudo) {
+    await loadFromSheets();
+  } else {
+    setTimeout(openAvatarCreator, 600);
+  }
+
   const frame = document.getElementById('avatar-preview-frame');
   if (frame) frame.addEventListener('click', function(){
     const imgEl = document.getElementById('avatar-preview-img');
     if(imgEl){ imgEl.style.transform='scale(1.15) translateY(-4px)'; setTimeout(function(){imgEl.style.transform='';},250); }
   });
+
+  // Synchro périodique toutes les 5 minutes (si en ligne)
+  setInterval(function(){
+    if (PROFILE.pseudo && navigator.onLine) syncToSheets();
+  }, 5 * 60 * 1000);
+
+  // Détection online/offline
+  window.addEventListener('online',  function(){ setSyncIndicator('ok');      if(PROFILE.pseudo) syncToSheets(); });
+  window.addEventListener('offline', function(){ setSyncIndicator('offline'); });
 });
 
 /* ── PWA ────────────────────────────────────────────── */
