@@ -586,6 +586,10 @@ window.addEventListener('load', async function() {
   PROFILE.badges = PROFILE.badges || [];
   checkBadges();
 
+  // S-09 : connexion quotidienne + quêtes
+  checkDailyConnexion();
+  checkQuetes();
+
   const frame = document.getElementById('avatar-preview-frame');
   if (frame) frame.addEventListener('click', function(){
     const imgEl = document.getElementById('avatar-preview-img');
@@ -888,3 +892,347 @@ window.navigateToDefi = function() {
   showQuizView('home');
   updateQuizHomeStats();
 };
+
+/* ═══════════════════════════════════════════════════════
+   S-09 — MOTEUR DE QUÊTES
+   Quêtes dynamiques basées sur les stats localStorage
+   Types : daily (quotidien), weekly (hebdo), epic (long terme), special
+═══════════════════════════════════════════════════════ */
+
+/* ── Catalogue des quêtes ───────────────────────────── */
+const QUETES_CATALOGUE = [
+
+  // ── QUOTIDIENNES ──────────────────────────────────────
+  {
+    id: 'daily_connexion',
+    type: 'daily',
+    typeLabel: 'Quotidienne',
+    color: 'cyan',
+    icon: '📅',
+    name: 'Agent Présent',
+    desc: 'Se connecter à SafeZone RPG aujourd\'hui.',
+    objectif: 1,
+    xpReward: 10,
+    getProgress: function(stats) { return stats.connexionAujourdhui ? 1 : 0; },
+  },
+  {
+    id: 'daily_quiz',
+    type: 'daily',
+    typeLabel: 'Quotidienne',
+    color: 'cyan',
+    icon: '🧠',
+    name: 'Défi du Jour',
+    desc: 'Répondre à 3 questions de quiz aujourd\'hui.',
+    objectif: 3,
+    xpReward: 30,
+    getProgress: function(stats) { return Math.min(stats.quizAujourdhui || 0, 3); },
+  },
+
+  // ── HEBDOMADAIRES ─────────────────────────────────────
+  {
+    id: 'weekly_quiz5',
+    type: 'weekly',
+    typeLabel: 'Hebdomadaire',
+    color: 'gold',
+    icon: '🎯',
+    name: 'Semaine Studieuse',
+    desc: 'Réussir 5 quiz correctement cette semaine.',
+    objectif: 5,
+    xpReward: 75,
+    getProgress: function(stats) { return Math.min(stats.quizCorrectsSemaine || 0, 5); },
+  },
+  {
+    id: 'weekly_signal',
+    type: 'weekly',
+    typeLabel: 'Hebdomadaire',
+    color: 'gold',
+    icon: '👁️',
+    name: 'Œil du Guetteur',
+    desc: 'Créer 2 signalements cette semaine.',
+    objectif: 2,
+    xpReward: 100,
+    getProgress: function(stats) { return Math.min(stats.signalementsSemaine || 0, 2); },
+  },
+  {
+    id: 'weekly_streak',
+    type: 'weekly',
+    typeLabel: 'Hebdomadaire',
+    color: 'gold',
+    icon: '🔥',
+    name: 'Série Parfaite',
+    desc: 'Se connecter 5 jours consécutifs cette semaine.',
+    objectif: 5,
+    xpReward: 120,
+    getProgress: function(stats) { return Math.min(stats.streakJours || 0, 5); },
+  },
+
+  // ── ÉPIQUES (long terme) ──────────────────────────────
+  {
+    id: 'epic_quiz20',
+    type: 'epic',
+    typeLabel: 'Épique',
+    color: 'purple',
+    icon: '🏆',
+    name: 'Maître des Quiz',
+    desc: 'Réussir 20 quiz au total.',
+    objectif: 20,
+    xpReward: 300,
+    getProgress: function(stats) { return Math.min(stats.quizCorrects || 0, 20); },
+  },
+  {
+    id: 'epic_epi',
+    type: 'epic',
+    typeLabel: 'Épique',
+    color: 'purple',
+    icon: '🦺',
+    name: 'Expert EPI',
+    desc: 'Réussir 5 quiz de la catégorie EPI.',
+    objectif: 5,
+    xpReward: 200,
+    getProgress: function(stats) { return Math.min(stats.quizEPICorrects || 0, 5); },
+  },
+  {
+    id: 'epic_signal5',
+    type: 'epic',
+    typeLabel: 'Épique',
+    color: 'purple',
+    icon: '🛡️',
+    name: 'Gardien de l\'Agence',
+    desc: 'Créer 5 signalements validés par le QSE.',
+    objectif: 5,
+    xpReward: 500,
+    getProgress: function(stats) { return Math.min(stats.signalementsValides || 0, 5); },
+  },
+  {
+    id: 'epic_niveau5',
+    type: 'epic',
+    typeLabel: 'Épique',
+    color: 'purple',
+    icon: '⭐',
+    name: 'Ascension',
+    desc: 'Atteindre le niveau 5.',
+    objectif: 5,
+    xpReward: 400,
+    getProgress: function(stats) { return Math.min(PROFILE.niveau, 5); },
+  },
+
+  // ── SPÉCIALES ─────────────────────────────────────────
+  {
+    id: 'special_avatar',
+    type: 'special',
+    typeLabel: 'Spéciale',
+    color: 'green',
+    icon: '🎭',
+    name: 'Bienvenue Agent',
+    desc: 'Créer ton profil et personnaliser ton avatar.',
+    objectif: 1,
+    xpReward: 25,
+    getProgress: function(stats) { return PROFILE.pseudo ? 1 : 0; },
+  },
+  {
+    id: 'special_quiz_first',
+    type: 'special',
+    typeLabel: 'Spéciale',
+    color: 'green',
+    icon: '🌱',
+    name: 'Premier Pas',
+    desc: 'Répondre à ta première question de quiz.',
+    objectif: 1,
+    xpReward: 15,
+    getProgress: function(stats) { return Math.min(stats.quizTotal || 0, 1); },
+  },
+];
+
+/* ── État des quêtes (localStorage) ─────────────────── */
+function getQuestesState() {
+  try { return JSON.parse(localStorage.getItem('safezone_quetes') || '{}'); } catch(e) { return {}; }
+}
+function saveQuestesState(state) {
+  try { localStorage.setItem('safezone_quetes', JSON.stringify(state)); } catch(e) {}
+}
+
+/* ── Vérification et claim des quêtes ───────────────── */
+function checkQuetes() {
+  const stats  = getStats();
+  const qState = getQuestesState();
+  let nouvelles = [];
+
+  QUETES_CATALOGUE.forEach(function(q) {
+    const progress = q.getProgress(stats);
+    const termine  = progress >= q.objectif;
+    const claimed  = qState[q.id] && qState[q.id].claimed;
+
+    if (termine && !claimed && !qState[q.id]) {
+      // Auto-complétion : marquer comme terminée (pas encore réclamée)
+      if (!qState[q.id]) qState[q.id] = {};
+      qState[q.id].completed = true;
+      qState[q.id].dateCompleted = new Date().toISOString();
+      nouvelles.push(q);
+    }
+  });
+
+  if (nouvelles.length > 0) {
+    saveQuestesState(qState);
+    // Notif pour la première nouvelle quête terminée
+    showToast('⚔️ Quête terminée : ' + nouvelles[0].name + ' !');
+  }
+  return qState;
+}
+
+/* ── Réclamer la récompense d'une quête ─────────────── */
+function claimQuete(questId) {
+  const qState = getQuestesState();
+  const quete  = QUETES_CATALOGUE.find(function(q) { return q.id === questId; });
+  if (!quete || !qState[questId] || qState[questId].claimed) return;
+
+  qState[questId].claimed    = true;
+  qState[questId].dateClaimed = new Date().toISOString();
+  saveQuestesState(qState);
+
+  // Gain XP
+  PROFILE.xp    += quete.xpReward;
+  PROFILE.niveau = calcNiveau(PROFILE.xp);
+  saveProfile(PROFILE);
+  refreshUI();
+  syncToSheets();
+
+  showXpPopup(quete.xpReward, quete.name);
+  renderQuetes();
+}
+
+/* ── Rendu de l'écran quêtes ────────────────────────── */
+function renderQuetes() {
+  const stats  = getStats();
+  const qState = checkQuetes();
+
+  const actives   = [];
+  const terminees = [];
+
+  QUETES_CATALOGUE.forEach(function(q) {
+    const progress = q.getProgress(stats);
+    const pct      = Math.min(100, Math.round(progress / q.objectif * 100));
+    const state    = qState[q.id] || {};
+    const claimed  = state.claimed;
+    const completed = progress >= q.objectif;
+
+    const card = buildQuesteCard(q, progress, pct, completed, claimed);
+
+    if (claimed) {
+      terminees.push({ card, date: state.dateClaimed });
+    } else {
+      actives.push({ card, pct });
+    }
+  });
+
+  // Trier : quêtes les plus avancées en premier
+  actives.sort(function(a,b) { return b.pct - a.pct; });
+
+  // Actives
+  const activesList = document.getElementById('quests-actives-list');
+  const activesEmpty = document.getElementById('quests-actives-empty');
+  if (activesList) {
+    activesList.innerHTML = actives.map(function(a){ return a.card; }).join('');
+    if (activesEmpty) activesEmpty.style.display = actives.length === 0 ? 'flex' : 'none';
+  }
+
+  // Terminées
+  terminees.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+  const termineesList  = document.getElementById('quests-terminees-list');
+  const termineesEmpty = document.getElementById('quests-terminees-empty');
+  if (termineesList) {
+    termineesList.innerHTML = terminees.map(function(t){ return t.card; }).join('');
+    if (termineesEmpty) termineesEmpty.style.display = terminees.length === 0 ? 'flex' : 'none';
+  }
+
+  // Catalogue
+  const catalogueList = document.getElementById('quests-catalogue-list');
+  if (catalogueList) {
+    catalogueList.innerHTML = QUETES_CATALOGUE.map(function(q) {
+      const progress = q.getProgress(stats);
+      const pct      = Math.min(100, Math.round(progress / q.objectif * 100));
+      const claimed  = (qState[q.id] || {}).claimed;
+      return buildQuesteCard(q, progress, pct, progress >= q.objectif, claimed);
+    }).join('');
+  }
+
+  // Sous-titre
+  const subtitle = document.getElementById('quetes-subtitle');
+  if (subtitle) {
+    subtitle.textContent = actives.length + ' active' + (actives.length > 1 ? 's' : '')
+      + ' · ' + terminees.length + ' terminée' + (terminees.length > 1 ? 's' : '');
+  }
+
+  // Badge nav
+  const navBadge = document.querySelector('[data-screen="quetes"] .nav-badge');
+  if (navBadge) {
+    const claimable = actives.filter(function(a){ return a.pct >= 100; }).length;
+    navBadge.textContent = claimable || '';
+    navBadge.style.display = claimable > 0 ? 'flex' : 'none';
+  }
+}
+
+/* ── Builder d'une carte quête ──────────────────────── */
+function buildQuesteCard(q, progress, pct, completed, claimed) {
+  const colorClass = { cyan:'cyan', gold:'gold', purple:'purple', green:'green' }[q.color] || 'cyan';
+  const typeColors = { daily:'badge-cyan', weekly:'badge-gold', epic:'badge-purple', special:'badge-green' };
+  const badgeClass = typeColors[q.type] || 'badge-cyan';
+
+  let footer = '';
+  if (claimed) {
+    footer = '<span style="font-size:11px;color:var(--accent-success)">✅ Récompense réclamée</span>'
+           + '<div class="quest-xp-reward">+' + q.xpReward + ' XP</div>';
+  } else if (completed) {
+    footer = '<span style="font-size:11px;color:var(--accent-secondary)">🎉 Terminée !</span>'
+           + '<button class="quest-claim-btn" onclick="claimQuete(\'' + q.id + '\')">Réclamer +' + q.xpReward + ' XP</button>';
+  } else {
+    footer = '<span style="font-size:11px;color:var(--text-muted)">' + progress + ' / ' + q.objectif + '</span>'
+           + '<div class="quest-xp-reward">💎 +' + q.xpReward + ' XP</div>';
+  }
+
+  return '<div class="quest-card quest-type-' + q.type + (claimed ? '" style="opacity:0.6' : '') + '">'
+    + '<div class="quest-card-accent ' + colorClass + '"></div>'
+    + '<div class="quest-header">'
+    +   '<div class="quest-name">' + q.icon + ' ' + q.name + '</div>'
+    +   '<span class="badge ' + badgeClass + '">' + q.typeLabel.toUpperCase() + '</span>'
+    + '</div>'
+    + '<div class="quest-desc">' + q.desc + '</div>'
+    + (claimed ? '' :
+        '<div class="quest-progress-label"><span></span><span>' + pct + '%</span></div>'
+      + '<div class="progress-bar" style="margin-bottom:6px;">'
+      +   '<div class="progress-fill ' + colorClass + '" style="width:' + pct + '%"></div>'
+      + '</div>')
+    + '<div class="quest-footer">' + footer + '</div>'
+    + '</div>';
+}
+
+/* ── Mise à jour stats connexion quotidienne ─────────── */
+function checkDailyConnexion() {
+  const stats   = getStats();
+  const today   = new Date().toDateString();
+  const lastDay = stats.dernierJour;
+
+  if (lastDay === today) {
+    stats.connexionAujourdhui = true;
+  } else {
+    // Nouveau jour
+    stats.connexionAujourdhui  = true;
+    stats.quizAujourdhui       = 0;
+    stats.dernierJour          = today;
+    // Streak
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    if (lastDay === yesterday) {
+      stats.streakJours = (stats.streakJours || 0) + 1;
+    } else if (!lastDay) {
+      stats.streakJours = 1;
+    } else {
+      stats.streakJours = 1; // streak cassé
+    }
+    // Reset stats semaine si lundi
+    const dayOfWeek = new Date().getDay();
+    if (dayOfWeek === 1) {
+      stats.quizCorrectsSemaine  = 0;
+      stats.signalementsSemaine  = 0;
+    }
+  }
+  saveStats(stats);
+}
