@@ -3,7 +3,7 @@
    S-02 · Cache-First + Network-Fallback strategy
    ============================================================ */
 
-const CACHE_NAME    = 'safezone-rpg-v6';
+const CACHE_NAME    = 'safezone-rpg-v7';
 const OFFLINE_URL   = './index.html';
 
 /* Assets mis en cache au premier lancement */
