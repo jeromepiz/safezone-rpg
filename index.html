@@ -1164,6 +1164,65 @@
       text-align: center; margin-top: 8px; opacity: 0.4;
     }
 
+
+    /* ═══════════════ S-12 : CANAL QSE ═══════════════ */
+    .canal-telegram-card {
+      display: flex; align-items: center; gap: 12px;
+      background: linear-gradient(135deg, rgba(0,136,204,0.15), rgba(0,136,204,0.05));
+      border: 1px solid rgba(0,136,204,0.4); border-radius: var(--radius-lg);
+      padding: 14px; margin-bottom: 16px;
+    }
+    .canal-telegram-icon { font-size: 32px; flex-shrink: 0; }
+    .canal-telegram-body { flex: 1; }
+    .canal-telegram-title { font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--text-primary); }
+    .canal-telegram-sub   { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+    .canal-telegram-btn {
+      background: #0088cc; color: white; border: none;
+      border-radius: var(--radius-md); padding: 8px 14px;
+      font-family: var(--font-display); font-size: 12px; font-weight: 700;
+      cursor: pointer; flex-shrink: 0; -webkit-tap-highlight-color: transparent;
+    }
+    .canal-telegram-btn:active { opacity: 0.8; }
+
+    .canal-msg-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 14px; margin-bottom: 10px;
+      position: relative; overflow: hidden;
+    }
+    .canal-msg-card::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    }
+    .canal-msg-card.type-alerte::before    { background: var(--accent-danger); }
+    .canal-msg-card.type-info::before      { background: var(--accent-primary); }
+    .canal-msg-card.type-formation::before { background: var(--accent-purple); }
+    .canal-msg-card.type-bravo::before     { background: var(--accent-success); }
+    .canal-msg-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .canal-msg-type {
+      font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px; padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .type-alerte    .canal-msg-type { background: rgba(255,71,87,0.12);   color: var(--accent-danger); }
+    .type-info      .canal-msg-type { background: rgba(0,212,255,0.12);   color: var(--accent-primary); }
+    .type-formation .canal-msg-type { background: rgba(168,85,247,0.12);  color: var(--accent-purple); }
+    .type-bravo     .canal-msg-type { background: rgba(46,213,115,0.12);  color: var(--accent-success); }
+    .canal-msg-date { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
+    .canal-msg-title { font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+    .canal-msg-body  { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+    .canal-msg-author { font-size: 10px; color: var(--text-muted); margin-top: 8px; }
+
+    /* Compose message (QSE only) */
+    .canal-compose-btn {
+      position: fixed; bottom: calc(var(--navbar-h) + var(--safe-bottom) + 16px);
+      right: 16px; width: 52px; height: 52px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-success), #1aaf52);
+      border: none; color: white; font-size: 24px; cursor: pointer;
+      box-shadow: 0 4px 16px rgba(46,213,115,0.4); z-index: 100;
+      display: none; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .canal-compose-btn.visible { display: flex; }
+
   </style>
 </head>
 <body>
@@ -1609,6 +1668,33 @@
         <div class="coming-soon-text">Classement temps réel · Filtres période · Google Sheets sync</div>
       </div>
     </section>
+    <!-- ── CANAL QSE ─────────────────────────────────── -->
+    <section id="screen-canal" class="screen">
+      <div class="screen-header">
+        <div class="screen-eyebrow">Communications</div>
+        <div class="screen-title">Canal <span>QSE</span></div>
+        <div class="screen-subtitle">Messages officiels de votre service QSE</div>
+      </div>
+
+      <!-- Abonnement Telegram -->
+      <div class="canal-telegram-card" id="canal-telegram-card">
+        <div class="canal-telegram-icon">📣</div>
+        <div class="canal-telegram-body">
+          <div class="canal-telegram-title">Notifications Telegram</div>
+          <div class="canal-telegram-sub">Recevez les alertes QSE directement sur votre téléphone</div>
+        </div>
+        <button class="canal-telegram-btn" onclick="openTelegram()">Rejoindre</button>
+      </div>
+
+      <!-- Messages QSE -->
+      <div class="card-title" style="margin-bottom:10px;">📋 Messages QSE</div>
+      <div id="canal-messages-list">
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <div class="empty-title">Chargement…</div>
+        </div>
+      </div>
+    </section>
 
   </main>
 
@@ -1620,6 +1706,7 @@
     <button class="nav-item nav-signal" onclick="navigate('signaler',this);showSignalView('home');renderRecentSignalements();" data-screen="signaler"><div class="nav-icon-wrap"><span class="nav-icon">🚨</span></div><span class="nav-label">Signaler</span></button>
     <button class="nav-item" onclick="navigate('defi',this);showQuizView('home');updateQuizHomeStats();" data-screen="defi"><span class="nav-icon">🧠</span><span class="nav-label">Défi</span></button>
     <button class="nav-item" onclick="navigate('rang',this)" data-screen="rang"><span class="nav-icon">🏆</span><span class="nav-label">Rang</span></button>
+    <button class="nav-item" onclick="navigate('canal',this);loadCanalMessages();" data-screen="canal"><span class="nav-icon">📣</span><span class="nav-label">Canal</span></button>
   </nav>
 
 </div>
@@ -1806,6 +1893,40 @@
         <button class="signal-priority-btn danger active" onclick="updateStatut('rejeté')">❌ Rejeter</button>
       </div>
     </div>
+  </div>
+</div>
+
+
+<button class="canal-compose-btn" id="canal-compose-btn" onclick="openCanalCompose()">✏️</button>
+
+<!-- S-12 : Compose message QSE -->
+<div id="canal-compose-modal" class="hidden">
+  <div class="qse-modal-backdrop" onclick="closeCanalCompose()"></div>
+  <div class="qse-modal-card">
+    <div class="qse-modal-header">
+      <div class="qse-modal-title">📣 Nouveau Message QSE</div>
+      <button class="avatar-close-btn" onclick="closeCanalCompose()">✕</button>
+    </div>
+    <div class="signal-field">
+      <label class="signal-label">Type</label>
+      <div class="signal-priority-row">
+        <button class="signal-priority-btn active" data-msgtype="info" onclick="selectMsgType(this,'info')">ℹ️ Info</button>
+        <button class="signal-priority-btn" data-msgtype="alerte" onclick="selectMsgType(this,'alerte')">🚨 Alerte</button>
+        <button class="signal-priority-btn" data-msgtype="formation" onclick="selectMsgType(this,'formation')">📚 Formation</button>
+        <button class="signal-priority-btn" data-msgtype="bravo" onclick="selectMsgType(this,'bravo')">🎉 Bravo</button>
+      </div>
+    </div>
+    <div class="signal-field">
+      <label class="signal-label">Titre <span class="signal-required">*</span></label>
+      <input type="text" id="canal-msg-titre" class="signal-input" placeholder="Titre du message" maxlength="80" style="width:100%" />
+    </div>
+    <div class="signal-field">
+      <label class="signal-label">Message <span class="signal-required">*</span></label>
+      <textarea id="canal-msg-body" class="signal-textarea" placeholder="Contenu du message QSE…" maxlength="500"></textarea>
+    </div>
+    <button class="signal-submit-btn" style="background:linear-gradient(135deg,var(--accent-success),#1aaf52);" onclick="publishCanalMessage()">
+      📣 Publier + Notifier Telegram
+    </button>
   </div>
 </div>
 
