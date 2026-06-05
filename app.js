@@ -659,3 +659,232 @@ window.addEventListener('appinstalled',function(){
   var btn=document.getElementById('install-btn');
   if(btn) btn.remove();
 });
+
+/* ═══════════════════════════════════════════════════════
+   S-07 — MOTEUR QUIZ
+   Chargement depuis Google Sheets (S-03 API)
+   Gestion état, réponses, XP, stats
+═══════════════════════════════════════════════════════ */
+
+/* ── État du quiz ───────────────────────────────────── */
+let quizState = {
+  questions:    [],
+  currentIndex: 0,
+  xpEarned:     0,
+  correct:      0,
+  wrong:        0,
+  answered:     false,
+  categorie:    '',
+};
+
+/* ── Démarrage ──────────────────────────────────────── */
+async function startQuiz(categorie) {
+  quizState = { questions:[], currentIndex:0, xpEarned:0, correct:0, wrong:0, answered:false, categorie };
+
+  showQuizView('loading');
+  showToast('⏳ Chargement des questions…');
+
+  // Charge depuis Google Sheets
+  const params = { action: 'getQuiz', limit: 10 };
+  if (categorie) params.categorie = categorie;
+  const data = await apiGet(params);
+
+  if (!data || data.length === 0) {
+    showToast('⚠️ Aucune question disponible');
+    showQuizView('home');
+    return;
+  }
+
+  quizState.questions = data;
+  showQuizView('play');
+  renderQuestion();
+}
+
+/* ── Afficher une vue ───────────────────────────────── */
+function showQuizView(view) {
+  document.getElementById('quiz-home').style.display   = (view === 'home'   || view === 'loading') ? 'block' : 'none';
+  document.getElementById('quiz-play').style.display   = (view === 'play')   ? 'block' : 'none';
+  document.getElementById('quiz-result').style.display = (view === 'result') ? 'block' : 'none';
+}
+
+/* ── Afficher la question courante ──────────────────── */
+function renderQuestion() {
+  const q     = quizState.questions[quizState.currentIndex];
+  const total = quizState.questions.length;
+  const num   = quizState.currentIndex + 1;
+
+  // Progress
+  document.getElementById('quiz-progress-fill').style.width = ((num - 1) / total * 100) + '%';
+  document.getElementById('quiz-q-num').textContent   = num;
+  document.getElementById('quiz-q-total').textContent = total;
+  document.getElementById('quiz-xp-earned').textContent = quizState.xpEarned;
+  document.getElementById('quiz-cat-label').textContent = q.categorie || 'Quiz';
+
+  // Question
+  document.getElementById('quiz-question-text').textContent = q.question;
+
+  // Choix
+  const choicesEl = document.getElementById('quiz-choices');
+  choicesEl.innerHTML = '';
+  const lettres = ['A','B','C','D'];
+  lettres.forEach(function(l) {
+    if (!q.choix[l]) return;
+    const btn = document.createElement('button');
+    btn.className = 'quiz-choice-btn';
+    btn.innerHTML = '<span class="quiz-choice-letter">'+l+'</span><span class="quiz-choice-text">'+q.choix[l]+'</span>';
+    btn.onclick = function() { answerQuestion(l, q.questionId, btn); };
+    choicesEl.appendChild(btn);
+  });
+
+  // Reset explication
+  document.getElementById('quiz-explication').classList.add('hidden');
+  document.getElementById('quiz-next-btn').textContent = (num === total) ? 'Voir mon score →' : 'Question suivante →';
+  quizState.answered = false;
+}
+
+/* ── Répondre ───────────────────────────────────────── */
+async function answerQuestion(reponse, questionId, btnClicked) {
+  if (quizState.answered) return;
+  quizState.answered = true;
+
+  // Désactiver tous les boutons
+  document.querySelectorAll('.quiz-choice-btn').forEach(function(b) { b.disabled = true; });
+
+  // Envoyer au serveur
+  const result = await apiPost({ action: 'submitQuizAnswer', userId: PROFILE.userId, questionId, reponse });
+
+  if (!result) {
+    showToast('⚠️ Erreur réseau, réessaie');
+    quizState.answered = false;
+    document.querySelectorAll('.quiz-choice-btn').forEach(function(b) { b.disabled = false; });
+    return;
+  }
+
+  const correct = result.correct;
+  const bonneReponse = result.bonneReponse;
+  const xpGagne = result.xpGagné || 0;
+
+  // Colorier les boutons
+  document.querySelectorAll('.quiz-choice-btn').forEach(function(btn) {
+    const letter = btn.querySelector('.quiz-choice-letter').textContent;
+    if (letter === bonneReponse) btn.classList.add('correct');
+    if (letter === reponse && !correct) btn.classList.add('wrong');
+  });
+
+  // Stats locales
+  if (correct) {
+    quizState.correct++;
+    quizState.xpEarned += xpGagne;
+  } else {
+    quizState.wrong++;
+  }
+
+  // Mettre à jour XP affiché
+  document.getElementById('quiz-xp-earned').textContent = quizState.xpEarned;
+
+  // Explication
+  const explEl   = document.getElementById('quiz-explication');
+  const iconEl   = document.getElementById('quiz-expl-icon');
+  const textEl   = document.getElementById('quiz-expl-text');
+  iconEl.textContent = correct ? '✅' : '❌';
+  textEl.textContent = result.explication || (correct ? 'Bonne réponse !' : 'Ce n\'est pas la bonne réponse.');
+  explEl.classList.remove('hidden');
+
+  // Mise à jour stats localStorage
+  const stats = getStats();
+  stats.quizTotal    = (stats.quizTotal    || 0) + 1;
+  stats.quizCorrects = (stats.quizCorrects || 0) + (correct ? 1 : 0);
+  stats.quizXP       = (stats.quizXP       || 0) + xpGagne;
+  saveStats(stats);
+
+  // Gain XP profil si correct
+  if (correct && xpGagne > 0) {
+    PROFILE.xp    += xpGagne;
+    PROFILE.niveau = calcNiveau(PROFILE.xp);
+    saveProfile(PROFILE);
+    // Synchro silencieuse
+    apiPost({ action:'addXP', userId:PROFILE.userId, xp:xpGagne, raison:'Quiz: '+questionId }).catch(function(){});
+  }
+
+  // Mise à jour topbar XP
+  refreshUI();
+}
+
+/* ── Question suivante ──────────────────────────────── */
+function nextQuestion() {
+  quizState.currentIndex++;
+  if (quizState.currentIndex >= quizState.questions.length) {
+    showResult();
+  } else {
+    renderQuestion();
+  }
+}
+
+/* ── Résultat final ─────────────────────────────────── */
+function showResult() {
+  showQuizView('result');
+  const total   = quizState.questions.length;
+  const correct = quizState.correct;
+  const pct     = Math.round(correct / total * 100);
+
+  // Icône et titre selon le score
+  let icon, titre;
+  if (pct === 100) { icon = '🏆'; titre = 'Parfait !'; }
+  else if (pct >= 80) { icon = '⭐'; titre = 'Excellent !'; }
+  else if (pct >= 60) { icon = '👍'; titre = 'Bien joué !'; }
+  else if (pct >= 40) { icon = '💪'; titre = 'Courage !'; }
+  else { icon = '📚'; titre = 'Continue à apprendre !'; }
+
+  document.getElementById('quiz-result-icon').textContent  = icon;
+  document.getElementById('quiz-result-title').textContent = titre;
+  document.getElementById('quiz-result-score').textContent = correct + ' / ' + total + ' (' + pct + '%)';
+  document.getElementById('res-correct').textContent = correct;
+  document.getElementById('res-wrong').textContent   = quizState.wrong;
+  document.getElementById('res-xp').textContent      = quizState.xpEarned;
+
+  // Barre de progression résultat
+  setTimeout(function() {
+    document.getElementById('quiz-result-bar-fill').style.width = pct + '%';
+  }, 200);
+
+  // Mise à jour stats home
+  updateQuizHomeStats();
+
+  // Vérif badges
+  checkBadges();
+
+  // Sync profil
+  if (quizState.xpEarned > 0) syncToSheets();
+}
+
+/* ── Rejouer ────────────────────────────────────────── */
+function restartQuiz() {
+  startQuiz(quizState.categorie);
+}
+
+/* ── Quitter ────────────────────────────────────────── */
+function exitQuiz() {
+  showQuizView('home');
+  updateQuizHomeStats();
+}
+
+/* ── Stats accueil ──────────────────────────────────── */
+function updateQuizHomeStats() {
+  const stats = getStats();
+  const elTotal   = document.getElementById('qh-total');
+  const elCorrect = document.getElementById('qh-correct');
+  const elXP      = document.getElementById('qh-xp');
+  if (elTotal)   elTotal.textContent   = stats.quizTotal    || 0;
+  if (elCorrect) elCorrect.textContent = stats.quizCorrects || 0;
+  if (elXP)      elXP.textContent      = stats.quizXP       || 0;
+}
+
+// Appel au navigate vers l'écran défi
+const _navigateOrig = navigate;
+// Patch navigate pour initialiser le quiz home
+const _origNavigate = window.navigate;
+window.navigateToDefi = function() {
+  navigate('defi', document.querySelector('[data-screen="defi"]'));
+  showQuizView('home');
+  updateQuizHomeStats();
+};
