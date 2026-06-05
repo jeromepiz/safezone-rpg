@@ -804,6 +804,118 @@
     .badge-popup-label { font-family: var(--font-display); font-size: 16px; font-weight: 800; color: var(--text-primary); }
     .badge-popup-desc  { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 
+
+    /* ═══════════════ S-07 : MOTEUR QUIZ ═══════════════ */
+
+    /* Home */
+    .quiz-home-hero {
+      background: linear-gradient(135deg, #1a0a2e, #0e2436);
+      border: 1px solid rgba(168,85,247,0.3); border-radius: var(--radius-xl);
+      padding: 20px; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .quiz-home-icon { font-size: 52px; flex-shrink: 0; filter: drop-shadow(0 0 12px rgba(168,85,247,0.6)); }
+    .quiz-home-stats { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .quiz-stat-item { display: flex; align-items: center; justify-content: space-between; }
+    .quiz-stat-val { font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--text-primary); }
+    .quiz-stat-val.cyan { color: var(--accent-primary); }
+    .quiz-stat-val.gold { color: var(--accent-secondary); }
+    .quiz-stat-lbl { font-size: 11px; color: var(--text-muted); }
+
+    .quiz-cat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .quiz-cat-btn {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 16px 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      cursor: pointer; transition: all 0.18s; -webkit-tap-highlight-color: transparent;
+      text-align: center;
+    }
+    .quiz-cat-btn:active { transform: scale(0.96); border-color: var(--accent-purple); }
+    .quiz-cat-icon { font-size: 28px; }
+    .quiz-cat-name { font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--text-primary); }
+    .quiz-cat-sub  { font-size: 10px; color: var(--text-muted); }
+
+    /* Play */
+    .quiz-play-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+    }
+    .quiz-back-btn {
+      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      color: var(--text-secondary); font-size: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .quiz-progress-wrap { flex: 1; }
+    .quiz-progress-bar  { height: 6px; background: var(--bg-elevated); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+    .quiz-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-primary)); border-radius: 3px; transition: width 0.4s ease; }
+    .quiz-progress-label { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+    .quiz-xp-counter { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--accent-secondary); flex-shrink: 0; }
+
+    .quiz-cat-label {
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--accent-purple);
+      margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+    }
+    .quiz-cat-label::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-purple); }
+
+    .quiz-question-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px; margin-bottom: 14px;
+      position: relative; overflow: hidden; min-height: 90px;
+      display: flex; align-items: center;
+    }
+    .quiz-question-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--accent-purple), var(--accent-primary));
+    }
+    .quiz-question-text {
+      font-family: var(--font-display); font-size: 16px; font-weight: 600;
+      color: var(--text-primary); line-height: 1.4;
+    }
+
+    .quiz-choices { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .quiz-choice-btn {
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 13px 16px;
+      display: flex; align-items: center; gap: 12px;
+      cursor: pointer; transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+      text-align: left; width: 100%;
+    }
+    .quiz-choice-btn:active:not(:disabled) { transform: scale(0.98); }
+    .quiz-choice-letter {
+      width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+      background: var(--bg-card); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--text-muted);
+    }
+    .quiz-choice-text { font-size: 14px; font-weight: 500; color: var(--text-primary); line-height: 1.3; }
+    .quiz-choice-btn.correct {
+      border-color: var(--accent-success); background: rgba(46,213,115,0.12);
+    }
+    .quiz-choice-btn.correct .quiz-choice-letter { background: var(--accent-success); border-color: var(--accent-success); color: #0b1219; }
+    .quiz-choice-btn.wrong {
+      border-color: var(--accent-danger); background: rgba(255,71,87,0.12);
+    }
+    .quiz-choice-btn.wrong .quiz-choice-letter { background: var(--accent-danger); border-color: var(--accent-danger); color: white; }
+    .quiz-choice-btn:disabled { cursor: default; opacity: 0.7; }
+
+    .quiz-explication {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 14px; margin-top: 4px;
+    }
+    .quiz-explication.hidden { display: none; }
+    .quiz-explication-icon { font-size: 24px; margin-bottom: 6px; }
+    .quiz-explication-text { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px; }
+
+    /* Résultat */
+    .quiz-result-header { text-align: center; padding: 24px 0 16px; }
+    .quiz-result-icon  { font-size: 64px; margin-bottom: 8px; }
+    .quiz-result-title { font-family: var(--font-display); font-size: 26px; font-weight: 800; color: var(--text-primary); }
+    .quiz-result-score { font-family: var(--font-mono); font-size: 20px; color: var(--accent-secondary); margin-top: 4px; }
+    .quiz-result-bar-wrap { padding: 0 8px; }
+    .quiz-result-bar { height: 10px; background: var(--bg-elevated); border-radius: 5px; overflow: hidden; }
+    .quiz-result-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-primary), var(--accent-success)); border-radius: 5px; transition: width 1s ease; }
+
   </style>
 </head>
 <body>
@@ -1008,30 +1120,102 @@
 
     <!-- ── DÉFI ─────────────────────────────────────────── -->
     <section id="screen-defi" class="screen">
-      <div class="screen-header">
-        <div class="screen-eyebrow">Challenge</div>
-        <div class="screen-title">Défi <span>Hebdo</span></div>
-        <div class="screen-subtitle">Résultat de toute l'agence</div>
-      </div>
-      <div class="defi-hero">
-        <div class="defi-icon-big">🧠</div>
-        <div class="defi-title-big">Quiz Sécurité Incendie</div>
-        <div class="defi-subtitle">10 questions · Toute l'agence participe · 1er = 500 pts bonus</div>
-        <div class="defi-timer">
-          <div class="defi-timer-unit"><div class="defi-timer-val" id="t-h">02</div><div class="defi-timer-lbl">Heures</div></div>
-          <div class="defi-timer-unit"><div class="defi-timer-val" id="t-m">34</div><div class="defi-timer-lbl">Min</div></div>
-          <div class="defi-timer-unit"><div class="defi-timer-val" id="t-s">17</div><div class="defi-timer-lbl">Sec</div></div>
+
+      <!-- VUE 1 : Accueil quiz -->
+      <div id="quiz-home">
+        <div class="screen-header">
+          <div class="screen-eyebrow">Sécuri-Défi</div>
+          <div class="screen-title">Quiz <span>Sécurité</span></div>
+          <div class="screen-subtitle">Teste tes connaissances · Gagne des XP</div>
+        </div>
+        <div class="quiz-home-hero">
+          <div class="quiz-home-icon">🧠</div>
+          <div class="quiz-home-stats">
+            <div class="quiz-stat-item"><span class="quiz-stat-val" id="qh-total">0</span><span class="quiz-stat-lbl">Quiz joués</span></div>
+            <div class="quiz-stat-item"><span class="quiz-stat-val cyan" id="qh-correct">0</span><span class="quiz-stat-lbl">Bonnes rép.</span></div>
+            <div class="quiz-stat-item"><span class="quiz-stat-val gold" id="qh-xp">0</span><span class="quiz-stat-lbl">XP gagnés</span></div>
+          </div>
+        </div>
+        <div class="quiz-cat-grid" id="quiz-cat-grid">
+          <button class="quiz-cat-btn" onclick="startQuiz('')">
+            <span class="quiz-cat-icon">🎲</span>
+            <span class="quiz-cat-name">Aléatoire</span>
+            <span class="quiz-cat-sub">Toutes catégories</span>
+          </button>
+          <button class="quiz-cat-btn" onclick="startQuiz('EPI')">
+            <span class="quiz-cat-icon">🦺</span>
+            <span class="quiz-cat-name">EPI</span>
+            <span class="quiz-cat-sub">Équipements</span>
+          </button>
+          <button class="quiz-cat-btn" onclick="startQuiz('Incendie')">
+            <span class="quiz-cat-icon">🔥</span>
+            <span class="quiz-cat-name">Incendie</span>
+            <span class="quiz-cat-sub">Prévention</span>
+          </button>
+          <button class="quiz-cat-btn" onclick="startQuiz('Gestes')">
+            <span class="quiz-cat-icon">💪</span>
+            <span class="quiz-cat-name">Gestes</span>
+            <span class="quiz-cat-sub">Postures sécurité</span>
+          </button>
+          <button class="quiz-cat-btn" onclick="startQuiz('Produits')">
+            <span class="quiz-cat-icon">⚗️</span>
+            <span class="quiz-cat-name">Produits</span>
+            <span class="quiz-cat-sub">Chimie & risques</span>
+          </button>
+          <button class="quiz-cat-btn" onclick="startQuiz('Urgence')">
+            <span class="quiz-cat-icon">🚨</span>
+            <span class="quiz-cat-name">Urgence</span>
+            <span class="quiz-cat-sub">Premiers secours</span>
+          </button>
+          <button class="quiz-cat-btn" onclick="startQuiz('Signalement')">
+            <span class="quiz-cat-icon">📋</span>
+            <span class="quiz-cat-name">Signalement</span>
+            <span class="quiz-cat-sub">Procédures</span>
+          </button>
         </div>
       </div>
-      <button class="btn btn-gold btn-full" style="margin-bottom:14px;" onclick="showToast('🎯 Défi disponible en S-07 !')">⚡ Relever le Défi</button>
-      <div class="card">
-        <div class="card-title">📊 Participation Agence</div>
-        <div class="stat-row">
-          <div class="stat-item"><div class="stat-value cyan">47</div><div class="stat-label">Participants</div></div>
-          <div class="stat-item"><div class="stat-value gold">78%</div><div class="stat-label">Moy. Score</div></div>
-          <div class="stat-item"><div class="stat-value purple">3ème</div><div class="stat-label">Ma position</div></div>
+
+      <!-- VUE 2 : Question en cours -->
+      <div id="quiz-play" style="display:none">
+        <div class="quiz-play-header">
+          <button class="quiz-back-btn" onclick="exitQuiz()">✕</button>
+          <div class="quiz-progress-wrap">
+            <div class="quiz-progress-bar"><div class="quiz-progress-fill" id="quiz-progress-fill"></div></div>
+            <div class="quiz-progress-label"><span id="quiz-q-num">1</span> / <span id="quiz-q-total">10</span></div>
+          </div>
+          <div class="quiz-xp-counter">+<span id="quiz-xp-earned">0</span> XP</div>
+        </div>
+        <div class="quiz-cat-label" id="quiz-cat-label">EPI</div>
+        <div class="quiz-question-card">
+          <div class="quiz-question-text" id="quiz-question-text">Chargement…</div>
+        </div>
+        <div class="quiz-choices" id="quiz-choices"></div>
+        <div class="quiz-explication hidden" id="quiz-explication">
+          <div class="quiz-explication-icon" id="quiz-expl-icon">✅</div>
+          <div class="quiz-explication-text" id="quiz-expl-text"></div>
+          <button class="btn btn-primary btn-full" id="quiz-next-btn" onclick="nextQuestion()">Question suivante →</button>
         </div>
       </div>
+
+      <!-- VUE 3 : Résultat final -->
+      <div id="quiz-result" style="display:none">
+        <div class="quiz-result-header">
+          <div class="quiz-result-icon" id="quiz-result-icon">🏆</div>
+          <div class="quiz-result-title" id="quiz-result-title">Excellent !</div>
+          <div class="quiz-result-score" id="quiz-result-score">10 / 10</div>
+        </div>
+        <div class="stat-row" style="margin:16px 0">
+          <div class="stat-item"><div class="stat-value green" id="res-correct">0</div><div class="stat-label">Correctes</div></div>
+          <div class="stat-item"><div class="stat-value red" id="res-wrong">0</div><div class="stat-label">Ratées</div></div>
+          <div class="stat-item"><div class="stat-value gold" id="res-xp">0</div><div class="stat-label">XP gagnés</div></div>
+        </div>
+        <div class="quiz-result-bar-wrap">
+          <div class="quiz-result-bar"><div class="quiz-result-bar-fill" id="quiz-result-bar-fill"></div></div>
+        </div>
+        <button class="btn btn-primary btn-full" style="margin-top:20px" onclick="restartQuiz()">🔄 Rejouer</button>
+        <button class="btn btn-secondary btn-full" style="margin-top:8px" onclick="exitQuiz()">🏠 Retour</button>
+      </div>
+
     </section>
 
     <!-- ── SIGNALER ─────────────────────────────────────── -->
@@ -1097,7 +1281,7 @@
     <button class="nav-item" onclick="navigate('profil',this)" data-screen="profil"><span class="nav-icon">👤</span><span class="nav-label">Profil</span></button>
     <button class="nav-item" onclick="navigate('quetes',this)" data-screen="quetes"><span class="nav-icon">⚔️</span><span class="nav-label">Quêtes</span><span class="nav-badge">3</span></button>
     <button class="nav-item nav-signal" onclick="navigate('signaler',this)" data-screen="signaler"><div class="nav-icon-wrap"><span class="nav-icon">🚨</span></div><span class="nav-label">Signaler</span></button>
-    <button class="nav-item" onclick="navigate('defi',this)" data-screen="defi"><span class="nav-icon">🧠</span><span class="nav-label">Défi</span></button>
+    <button class="nav-item" onclick="navigate('defi',this);showQuizView('home');updateQuizHomeStats();" data-screen="defi"><span class="nav-icon">🧠</span><span class="nav-label">Défi</span></button>
     <button class="nav-item" onclick="navigate('rang',this)" data-screen="rang"><span class="nav-icon">🏆</span><span class="nav-label">Rang</span></button>
   </nav>
 
