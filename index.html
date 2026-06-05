@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#0b1219" />
-  <meta name="description" content="SafeZone RPG — Sécurité au travail gamifiée · PIZZORNO Valence" />
+  <meta name="description" content="SafeZone RPG — Sécurité au travail gamifiée · PIZZORNO" />
   <title>SafeZone RPG</title>
 
   <link rel="manifest" href="manifest.json" />
@@ -752,6 +752,58 @@
       font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
     }
 
+
+    /* ── S-06 : Collection de badges ── */
+    #badges-collection {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding-top: 4px;
+    }
+    .badge-item {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 10px 4px; border-radius: var(--radius-md);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      transition: all 0.2s; cursor: default;
+    }
+    .badge-item.badge-gained {
+      border-color: rgba(0,212,255,0.3);
+      background: rgba(0,212,255,0.06);
+    }
+    .badge-item-icon  { font-size: 28px; line-height: 1; }
+    .badge-item-label {
+      font-family: var(--font-mono); font-size: 8px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px; text-align: center;
+      color: var(--text-muted);
+    }
+    .badge-item-desc  {
+      font-size: 8px; color: var(--text-muted); text-align: center; line-height: 1.3;
+      display: none;
+    }
+    .badge-item:hover .badge-item-desc { display: block; }
+
+    /* ── S-06 : Badge popup ── */
+    #badge-popup {
+      position: fixed; bottom: calc(var(--navbar-h) + 16px); left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, var(--bg-elevated), var(--bg-card));
+      border: 1px solid var(--accent-secondary); border-radius: var(--radius-xl);
+      padding: 16px 24px; text-align: center; z-index: 9000;
+      box-shadow: var(--glow-gold), 0 16px 40px rgba(0,0,0,0.6);
+      min-width: 220px;
+      animation: badge-slide-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+      pointer-events: none;
+    }
+    #badge-popup.hidden { display: none; }
+    @keyframes badge-slide-in {
+      from { opacity:0; transform: translateX(-50%) translateY(20px) scale(0.8); }
+      to   { opacity:1; transform: translateX(-50%) translateY(0) scale(1); }
+    }
+    .badge-popup-eyebrow {
+      font-family: var(--font-mono); font-size: 9px; color: var(--accent-secondary);
+      letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px;
+    }
+    .badge-popup-icon  { font-size: 40px; margin: 4px 0; }
+    .badge-popup-label { font-family: var(--font-display); font-size: 16px; font-weight: 800; color: var(--text-primary); }
+    .badge-popup-desc  { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
   </style>
 </head>
 <body>
@@ -795,7 +847,7 @@
       <div class="screen-header">
         <div class="screen-eyebrow">Tableau de bord</div>
         <div class="screen-title">Mon <span>Héros</span></div>
-        <div class="screen-subtitle">PIZZORNO Valence · Agence</div>
+        <div class="screen-subtitle">PIZZORNO Environnement</div>
       </div>
       <div class="hero-banner">
         <div class="hero-banner-top">
@@ -870,7 +922,7 @@
           <div class="profile-role" id="profile-class">⚡ Recrue · Niveau 1</div>
           <div class="profile-sync-row"><span id="profile-last-sync">☁️ Pas encore synchronisé</span></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px;">
-            <span class="badge badge-cyan">🏢 Valence</span>
+            <span class="badge badge-cyan">🏢 PIZZORNO</span>
             <span class="badge badge-gold" id="profile-pts-badge">💎 0 pts</span>
             <span class="badge badge-purple">📅 Depuis <span id="profile-since">—</span></span>
           </div>
@@ -887,12 +939,7 @@
       </div>
       <div class="card">
         <div class="card-title">🏅 Collection de Badges</div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px;padding-top:4px;" id="badges-collection">
-          <div style="text-align:center;flex:0 0 60px;opacity:0.25;">
-            <div style="font-size:32px">🔒</div>
-            <div style="font-size:9px;color:var(--text-muted);margin-top:3px;">À débloquer</div>
-          </div>
-        </div>
+        <div id="badges-collection"></div>
       </div>
       <div class="coming-soon">
         <div class="coming-soon-icon">💾</div>
@@ -1017,7 +1064,7 @@
       <div class="screen-header">
         <div class="screen-eyebrow">Classement</div>
         <div class="screen-title">Hall of <span>Fame</span></div>
-        <div class="screen-subtitle">Agence de Valence · Semaine en cours</div>
+        <div class="screen-subtitle">Classement de l'agence · Semaine en cours</div>
       </div>
       <div class="podium">
         <div class="podium-item"><div class="podium-avatar">😎</div><div class="podium-name">Marie T.</div><div class="podium-pts">2 810 pts</div><div class="podium-plinth">2</div></div>
@@ -1141,6 +1188,15 @@
     <div class="levelup-title">Tu montes en grade !</div>
     <div class="levelup-sub">Continue comme ça pour débloquer de nouveaux personnages</div>
   </div>
+</div>
+
+
+<!-- S-06 : Badge gagné popup -->
+<div id="badge-popup" class="hidden">
+  <div class="badge-popup-eyebrow">🏅 Badge débloqué !</div>
+  <div class="badge-popup-icon">🎭</div>
+  <div class="badge-popup-label">Premier Pas</div>
+  <div class="badge-popup-desc">Créer son profil SafeZone</div>
 </div>
 
 <script src="app.js"></script>
