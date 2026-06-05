@@ -1474,3 +1474,220 @@ function renderRecentSignalements() {
 
 // Init au navigate vers signaler
 const _origNavigateRef = window.navigate || function(){};
+
+/* ═══════════════════════════════════════════════════════
+   S-11 — INTERFACE QSE ADMIN
+   Accès : triple tap sur avatar profil + code PIN
+   Fonctions : liste signalements, changement statut, XP bonus
+═══════════════════════════════════════════════════════ */
+
+/* ── Config PIN (à changer avant le lancement !) ────── */
+const QSE_PIN = '1234';  // ← Change ce code avant le lancement !
+
+/* ── Triple tap détection ───────────────────────────── */
+let qseTapCount = 0;
+let qseTapTimer = null;
+
+function handleQSETap() {
+  qseTapCount++;
+  clearTimeout(qseTapTimer);
+  qseTapTimer = setTimeout(function() { qseTapCount = 0; }, 800);
+  if (qseTapCount >= 3) {
+    qseTapCount = 0;
+    openQSE();
+  }
+}
+
+/* ── Ouverture QSE ──────────────────────────────────── */
+let qsePinValue = '';
+let qseAuthenticated = false;
+let qseCurrentFilter = '';
+let qseSignalementsCache = [];
+let qseCurrentSigId = null;
+
+function openQSE() {
+  qsePinValue = '';
+  updatePinDisplay();
+  document.getElementById('qse-pin-error').classList.add('hidden');
+
+  if (qseAuthenticated) {
+    document.getElementById('qse-pin-gate').style.display    = 'none';
+    document.getElementById('qse-dashboard').style.display   = 'flex';
+    loadQSESignalements();
+  } else {
+    document.getElementById('qse-pin-gate').style.display    = 'flex';
+    document.getElementById('qse-dashboard').style.display   = 'none';
+  }
+  document.getElementById('qse-overlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeQSE() {
+  document.getElementById('qse-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+/* ── PIN ────────────────────────────────────────────── */
+function pinPress(key) {
+  if (key === '←') {
+    qsePinValue = qsePinValue.slice(0, -1);
+  } else if (key === 'OK') {
+    if (qsePinValue === QSE_PIN) {
+      qseAuthenticated = true;
+      document.getElementById('qse-pin-gate').style.display  = 'none';
+      document.getElementById('qse-dashboard').style.display = 'flex';
+      loadQSESignalements();
+    } else {
+      document.getElementById('qse-pin-error').classList.remove('hidden');
+      qsePinValue = '';
+      setTimeout(function(){
+        document.getElementById('qse-pin-error').classList.add('hidden');
+      }, 2000);
+    }
+  } else if (qsePinValue.length < 4) {
+    qsePinValue += key;
+  }
+  updatePinDisplay();
+}
+
+function updatePinDisplay() {
+  const dots = qsePinValue.split('').map(function(){ return '●'; });
+  while (dots.length < 4) dots.push('_');
+  document.getElementById('qse-pin-display').textContent = dots.join(' ');
+}
+
+/* ── Chargement signalements ────────────────────────── */
+async function loadQSESignalements() {
+  const listEl = document.getElementById('qse-signalements-list');
+  listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Chargement…</div></div>';
+
+  const data = await apiGet({ action: 'getSignalements' });
+
+  if (!data || data.length === 0) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Aucun signalement</div></div>';
+    updateQSEStats([]);
+    return;
+  }
+
+  qseSignalementsCache = data;
+  updateQSEStats(data);
+  renderQSEList(data, qseCurrentFilter);
+}
+
+function updateQSEStats(data) {
+  const total   = data.length;
+  const nouveau = data.filter(function(s){ return s.statut === 'nouveau'; }).length;
+  const encours = data.filter(function(s){ return s.statut === 'en-cours'; }).length;
+  const resolu  = data.filter(function(s){ return s.statut === 'résolu'; }).length;
+
+  document.getElementById('qse-stat-total').textContent   = total;
+  document.getElementById('qse-stat-nouveau').textContent = nouveau;
+  document.getElementById('qse-stat-encours').textContent = encours;
+  document.getElementById('qse-stat-resolu').textContent  = resolu;
+}
+
+function filterSignalements(statut, btn) {
+  qseCurrentFilter = statut;
+  document.querySelectorAll('#qse-overlay .quest-tab').forEach(function(t){ t.classList.remove('active'); });
+  btn.classList.add('active');
+  renderQSEList(qseSignalementsCache, statut);
+}
+
+function renderQSEList(data, filter) {
+  const listEl = document.getElementById('qse-signalements-list');
+  const filtered = filter ? data.filter(function(s){ return s.statut === filter; }) : data;
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Aucun signalement ' + (filter || '') + '</div></div>';
+    return;
+  }
+
+  const statusBadge = {
+    'nouveau':  '<span class="signal-recent-status status-nouveau">NOUVEAU</span>',
+    'en-cours': '<span class="signal-recent-status status-en-cours">EN COURS</span>',
+    'résolu':   '<span class="signal-recent-status status-résolu">RÉSOLU</span>',
+    'rejeté':   '<span class="signal-recent-status" style="background:rgba(255,71,87,0.12);color:var(--accent-danger)">REJETÉ</span>',
+  };
+  const priorityTag = {
+    'normale':  '<span class="qse-priority-tag priority-normale">Normale</span>',
+    'haute':    '<span class="qse-priority-tag priority-haute">Haute</span>',
+    'critique': '<span class="qse-priority-tag priority-critique">⚠️ Critique</span>',
+  };
+
+  listEl.innerHTML = filtered.map(function(s) {
+    const date = new Date(s.dateCreation).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+    return '<div class="qse-signal-card" onclick="openQSEDetail(\'' + s.sigId + '\')">'
+      + '<div class="qse-signal-top">'
+      +   '<div class="qse-signal-cat">' + s.categorie + '</div>'
+      +   (statusBadge[s.statut] || '')
+      + '</div>'
+      + '<div class="qse-signal-meta">' + date + ' · ' + (s.localisation || 'Localisation non renseignée') + '</div>'
+      + '<div class="qse-signal-desc">' + s.description.slice(0, 100) + (s.description.length > 100 ? '…' : '') + '</div>'
+      + '<div class="qse-signal-footer">'
+      +   '<div class="qse-signal-who">👤 ' + (s.pseudo || s.userId) + '</div>'
+      +   (priorityTag[s.priorite] || '')
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+/* ── Détail signalement ─────────────────────────────── */
+function openQSEDetail(sigId) {
+  qseCurrentSigId = sigId;
+  const s = qseSignalementsCache.find(function(x){ return x.sigId === sigId; });
+  if (!s) return;
+
+  document.getElementById('qse-modal-title').textContent = s.categorie;
+  document.getElementById('qse-comment').value = s.commentaireQSE || '';
+
+  const date = new Date(s.dateCreation).toLocaleDateString('fr-FR', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
+  document.getElementById('qse-modal-body').innerHTML =
+    '<div class="qse-detail-row"><div class="qse-detail-label">📝 Description</div><div class="qse-detail-val">' + s.description + '</div></div>'
+  + '<div class="qse-detail-row"><div class="qse-detail-label">📍 Localisation</div><div class="qse-detail-val">' + (s.localisation || '—') + '</div></div>'
+  + '<div class="qse-detail-row"><div class="qse-detail-label">👤 Signalé par</div><div class="qse-detail-val">' + (s.pseudo || s.userId) + '</div></div>'
+  + '<div class="qse-detail-row"><div class="qse-detail-label">📅 Date</div><div class="qse-detail-val">' + date + '</div></div>'
+  + '<div class="qse-detail-row"><div class="qse-detail-label">🎯 Priorité</div><div class="qse-detail-val">' + (s.priorite || 'normale') + '</div></div>'
+  + (s.commentaireQSE ? '<div class="qse-detail-row"><div class="qse-detail-label">💬 Commentaire QSE précédent</div><div class="qse-detail-val">' + s.commentaireQSE + '</div></div>' : '');
+
+  document.getElementById('qse-detail-modal').classList.remove('hidden');
+}
+
+function closeQSEDetail() {
+  document.getElementById('qse-detail-modal').classList.add('hidden');
+  qseCurrentSigId = null;
+}
+
+/* ── Mise à jour statut ─────────────────────────────── */
+async function updateStatut(statut) {
+  if (!qseCurrentSigId) return;
+  const comment = document.getElementById('qse-comment').value.trim();
+
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳';
+
+  const result = await apiPost({
+    action:      'updateSignalement',
+    sigId:       qseCurrentSigId,
+    statut,
+    commentaire: comment,
+  });
+
+  btn.disabled = false;
+  btn.textContent = statut === 'résolu' ? '✅ Résoudre' : statut === 'en-cours' ? '🔄 En cours' : '❌ Rejeter';
+
+  if (result) {
+    // Mettre à jour le cache local
+    const idx = qseSignalementsCache.findIndex(function(s){ return s.sigId === qseCurrentSigId; });
+    if (idx >= 0) {
+      qseSignalementsCache[idx].statut         = statut;
+      qseSignalementsCache[idx].commentaireQSE = comment;
+    }
+    closeQSEDetail();
+    updateQSEStats(qseSignalementsCache);
+    renderQSEList(qseSignalementsCache, qseCurrentFilter);
+    showToast(statut === 'résolu' ? '✅ Résolu ! +50 XP envoyé au salarié' : '🔄 Statut mis à jour');
+  } else {
+    showToast('⚠️ Erreur réseau');
+  }
+}
