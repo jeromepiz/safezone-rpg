@@ -194,9 +194,9 @@ const BADGES_DEFS = [
 
   // ── Classement ────────────────────────────────────────
   { id: 'podium',       icon: '🥉', label: 'Podium',          color: '#cd7f32',
-    desc: 'Terminer dans le top 3 de l'agence',
+    desc: "Terminer dans le top 3 de l'agence",
     condition: function(p, stats) { return (stats.meilleurePosition || 999) <= 3; } },
-  { id: 'champion_rang',icon:'🥇',  label: 'N°1 de l'agence',color: 'var(--accent-secondary)',
+  { id: 'champion_rang',icon:'🥇',  label: "N°1 de l'agence",color: 'var(--accent-secondary)',
     desc: 'Être 1er du classement',
     condition: function(p, stats) { return (stats.meilleurePosition || 999) === 1; } },
 ];
