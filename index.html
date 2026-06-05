@@ -640,15 +640,11 @@
     .xp-popup-val { font-family: var(--font-mono); font-size: 32px; font-weight: 700; color: var(--accent-secondary); margin: 8px 0; filter: drop-shadow(var(--glow-gold)); }
 
 
-    /* ── AVATAR CHAR GRID ── 6 personnages sur une ligne ── */
+    /* ── AVATAR CHAR GRID ── 2 lignes × 3 colonnes ── */
     .avatar-char-grid {
-      display: flex; flex-direction: row; gap: 6px;
-      overflow-x: auto; padding-bottom: 4px;
-      scrollbar-width: none;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
     }
-    .avatar-char-grid::-webkit-scrollbar { display: none; }
     .avatar-char-btn {
-      flex: 0 0 calc((100% - 30px) / 6);
       border-radius: var(--radius-md);
       background: var(--bg-elevated); border: 2px solid var(--border);
       display: flex; flex-direction: column; align-items: center;
@@ -670,14 +666,14 @@
     .avatar-char-btn.selected::before { opacity: 1; }
     .avatar-char-btn.locked { opacity: 0.35; cursor: default; filter: grayscale(0.8); }
     .avatar-char-img {
-      width: 100%; aspect-ratio: 1;
+      width: 100%; height: 80px;
       object-fit: contain; object-position: bottom center;
       background: var(--bg-base); border-radius: 6px;
       transition: transform 0.2s ease;
     }
     .avatar-char-btn.selected .avatar-char-img { transform: translateY(-2px) scale(1.06); }
     .avatar-char-label {
-      font-family: var(--font-mono); font-size: 7px; font-weight: 700;
+      font-family: var(--font-mono); font-size: 9px; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.5px;
       color: var(--text-muted); margin-top: 4px; text-align: center;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;
