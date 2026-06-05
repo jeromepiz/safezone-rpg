@@ -1061,6 +1061,109 @@
     .status-en-cours   { background: rgba(247,197,32,0.12); color: var(--accent-secondary); }
     .status-résolu     { background: rgba(46,213,115,0.12); color: var(--accent-success); }
 
+
+    /* ═══════════════ S-11 : INTERFACE QSE ═══════════════ */
+    #qse-overlay {
+      position: fixed; inset: 0; z-index: 5000;
+      background: var(--bg-base);
+      display: flex; flex-direction: column;
+      animation: overlay-in 0.3s ease both;
+    }
+    #qse-overlay.hidden { display: none; }
+
+    .qse-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 18px 12px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .qse-title {
+      font-family: var(--font-display); font-size: 20px; font-weight: 800;
+    }
+    .qse-title span { color: var(--accent-success); }
+
+    /* PIN */
+    #qse-pin-gate {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .qse-pin-wrap { width: 100%; max-width: 320px; text-align: center; }
+    .qse-pin-icon  { font-size: 48px; margin-bottom: 12px; }
+    .qse-pin-title { font-family: var(--font-display); font-size: 20px; font-weight: 800; color: var(--text-primary); }
+    .qse-pin-sub   { font-size: 13px; color: var(--text-secondary); margin-top: 4px; margin-bottom: 20px; }
+    .qse-pin-display {
+      font-family: var(--font-mono); font-size: 32px; font-weight: 700;
+      letter-spacing: 12px; color: var(--accent-primary);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 12px 20px;
+      margin-bottom: 8px; min-height: 56px;
+    }
+    .qse-pin-error {
+      color: var(--accent-danger); font-size: 13px; margin-bottom: 8px;
+    }
+    .qse-pin-error.hidden { display: none; }
+    .qse-pin-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px;
+    }
+    .qse-pin-btn {
+      padding: 16px; border-radius: var(--radius-md);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      color: var(--text-primary); font-family: var(--font-mono);
+      font-size: 20px; font-weight: 700; cursor: pointer;
+      -webkit-tap-highlight-color: transparent; transition: all 0.12s;
+    }
+    .qse-pin-btn:active { transform: scale(0.92); background: var(--bg-card); }
+    .qse-pin-ok {
+      background: linear-gradient(135deg, var(--accent-success), #1aaf52);
+      color: #0b1219; border-color: var(--accent-success);
+    }
+
+    /* Carte signalement QSE */
+    .qse-signal-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 14px; margin-bottom: 10px;
+      cursor: pointer; transition: border-color 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .qse-signal-card:active { border-color: var(--accent-primary); }
+    .qse-signal-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+    .qse-signal-cat { font-family: var(--font-display); font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .qse-signal-meta { font-size: 10px; color: var(--text-muted); margin-bottom: 6px; }
+    .qse-signal-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+    .qse-signal-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+    .qse-signal-who { font-size: 10px; color: var(--text-muted); }
+    .qse-priority-tag {
+      font-family: var(--font-mono); font-size: 8px; font-weight: 700;
+      padding: 2px 8px; border-radius: 10px; text-transform: uppercase;
+    }
+    .priority-normale  { background: rgba(0,212,255,0.1);  color: var(--accent-primary); }
+    .priority-haute    { background: rgba(247,197,32,0.1); color: var(--accent-secondary); }
+    .priority-critique { background: rgba(255,71,87,0.1);  color: var(--accent-danger); }
+
+    /* Modal détail */
+    #qse-detail-modal { position: fixed; inset: 0; z-index: 6000; display: flex; align-items: flex-end; }
+    #qse-detail-modal.hidden { display: none; }
+    .qse-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
+    .qse-modal-card {
+      position: relative; width: 100%; max-height: 85vh; overflow-y: auto;
+      background: var(--bg-panel); border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      padding: 20px 18px; border-top: 1px solid var(--border);
+      animation: slide-up 0.3s ease both;
+    }
+    @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .qse-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .qse-modal-title { font-family: var(--font-display); font-size: 17px; font-weight: 800; }
+    .qse-modal-body { margin-bottom: 16px; }
+    .qse-detail-row { margin-bottom: 10px; }
+    .qse-detail-label { font-family: var(--font-mono); font-size: 9px; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
+    .qse-detail-val { font-size: 13px; color: var(--text-primary); line-height: 1.4; }
+    .qse-modal-actions { border-top: 1px solid var(--border); padding-top: 14px; }
+
+    /* Triple tap trigger sur profil */
+    .qse-admin-hint {
+      font-family: var(--font-mono); font-size: 9px; color: var(--text-muted);
+      text-align: center; margin-top: 8px; opacity: 0.4;
+    }
+
   </style>
 </head>
 <body>
@@ -1172,7 +1275,7 @@
       </div>
       <div class="card">
         <div class="profile-avatar-section">
-          <div class="profile-avatar-ring">
+          <div class="profile-avatar-ring" id="qse-trigger" onclick="handleQSETap()">
             <div class="profile-avatar-inner" id="profile-avatar-big"><img src="avatars/recrue.png" style="width:88%;height:88%;object-fit:contain;" /></div>
           </div>
           <div class="profile-name" id="profile-name">Mon Héros</div>
@@ -1184,6 +1287,7 @@
             <span class="badge badge-purple">📅 Depuis <span id="profile-since">—</span></span>
           </div>
           <!-- S-04 : bouton modifier avatar -->
+          <div class="qse-admin-hint">⚙ Admin</div>
           <button class="edit-avatar-trigger" onclick="openAvatarCreator()" style="margin-top:8px;">
             ✏️ Modifier mon avatar
           </button>
@@ -1614,6 +1718,95 @@
   <div class="badge-popup-icon">🎭</div>
   <div class="badge-popup-label">Premier Pas</div>
   <div class="badge-popup-desc">Créer son profil SafeZone</div>
+</div>
+
+
+<!-- ═══════════════ S-11 : INTERFACE QSE ADMIN ═══════════════ -->
+<div id="qse-overlay" class="hidden">
+
+  <!-- Header -->
+  <div class="qse-header">
+    <div>
+      <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent-success);letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">Mode QSE</div>
+      <div class="qse-title">🛡️ Tableau de Bord <span>QSE</span></div>
+    </div>
+    <button class="avatar-close-btn" onclick="closeQSE()">✕</button>
+  </div>
+
+  <!-- PIN Gate -->
+  <div id="qse-pin-gate">
+    <div class="qse-pin-wrap">
+      <div class="qse-pin-icon">🔐</div>
+      <div class="qse-pin-title">Accès Réservé QSE</div>
+      <div class="qse-pin-sub">Entre le code PIN administrateur</div>
+      <div class="qse-pin-display" id="qse-pin-display">_ _ _ _</div>
+      <div class="qse-pin-error hidden" id="qse-pin-error">❌ Code incorrect</div>
+      <div class="qse-pin-grid">
+        <button class="qse-pin-btn" onclick="pinPress('1')">1</button>
+        <button class="qse-pin-btn" onclick="pinPress('2')">2</button>
+        <button class="qse-pin-btn" onclick="pinPress('3')">3</button>
+        <button class="qse-pin-btn" onclick="pinPress('4')">4</button>
+        <button class="qse-pin-btn" onclick="pinPress('5')">5</button>
+        <button class="qse-pin-btn" onclick="pinPress('6')">6</button>
+        <button class="qse-pin-btn" onclick="pinPress('7')">7</button>
+        <button class="qse-pin-btn" onclick="pinPress('8')">8</button>
+        <button class="qse-pin-btn" onclick="pinPress('9')">9</button>
+        <button class="qse-pin-btn" onclick="pinPress('←')">←</button>
+        <button class="qse-pin-btn" onclick="pinPress('0')">0</button>
+        <button class="qse-pin-btn qse-pin-ok" onclick="pinPress('OK')">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard QSE -->
+  <div id="qse-dashboard" style="display:none; overflow-y:auto; flex:1; padding:16px 18px;">
+
+    <!-- Stats rapides -->
+    <div class="stat-row" id="qse-stats-row">
+      <div class="stat-item"><div class="stat-value cyan" id="qse-stat-total">—</div><div class="stat-label">Total</div></div>
+      <div class="stat-item"><div class="stat-value gold" id="qse-stat-nouveau">—</div><div class="stat-label">Nouveaux</div></div>
+      <div class="stat-item"><div class="stat-value purple" id="qse-stat-encours">—</div><div class="stat-label">En cours</div></div>
+      <div class="stat-item"><div class="stat-value green" id="qse-stat-resolu">—</div><div class="stat-label">Résolus</div></div>
+    </div>
+
+    <!-- Filtre statut -->
+    <div class="quest-tabs" style="margin-bottom:12px;">
+      <button class="quest-tab active" onclick="filterSignalements('',this)">Tous</button>
+      <button class="quest-tab" onclick="filterSignalements('nouveau',this)">🆕 Nouveaux</button>
+      <button class="quest-tab" onclick="filterSignalements('en-cours',this)">🔄 En cours</button>
+      <button class="quest-tab" onclick="filterSignalements('résolu',this)">✅ Résolus</button>
+    </div>
+
+    <!-- Liste signalements -->
+    <div id="qse-signalements-list">
+      <div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Chargement…</div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal détail signalement -->
+<div id="qse-detail-modal" class="hidden">
+  <div class="qse-modal-backdrop" onclick="closeQSEDetail()"></div>
+  <div class="qse-modal-card">
+    <div class="qse-modal-header">
+      <div class="qse-modal-title" id="qse-modal-title">Signalement</div>
+      <button class="avatar-close-btn" onclick="closeQSEDetail()">✕</button>
+    </div>
+    <div class="qse-modal-body" id="qse-modal-body"></div>
+    <div class="qse-modal-actions">
+      <div class="signal-field">
+        <label class="signal-label">💬 Commentaire QSE</label>
+        <textarea id="qse-comment" class="signal-textarea" style="min-height:70px;"
+          placeholder="Retour au salarié, actions prises…"></textarea>
+      </div>
+      <div class="signal-priority-row">
+        <button class="signal-priority-btn" onclick="updateStatut('en-cours')">🔄 En cours</button>
+        <button class="signal-priority-btn" onclick="updateStatut('résolu')">✅ Résoudre</button>
+        <button class="signal-priority-btn danger active" onclick="updateStatut('rejeté')">❌ Rejeter</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="app.js"></script>
