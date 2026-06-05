@@ -1482,7 +1482,7 @@ const _origNavigateRef = window.navigate || function(){};
 ═══════════════════════════════════════════════════════ */
 
 /* ── Config PIN (à changer avant le lancement !) ────── */
-const QSE_PIN = '1909';  // ← Change ce code avant le lancement !
+const QSE_PIN = '1234';  // ← Change ce code avant le lancement !
 
 /* ── Triple tap détection ───────────────────────────── */
 let qseTapCount = 0;
@@ -1689,5 +1689,145 @@ async function updateStatut(statut) {
     showToast(statut === 'résolu' ? '✅ Résolu ! +50 XP envoyé au salarié' : '🔄 Statut mis à jour');
   } else {
     showToast('⚠️ Erreur réseau');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   S-12 — CANAL QSE + TELEGRAM
+   Messages QSE → stockés dans Sheets + envoyés via Telegram
+═══════════════════════════════════════════════════════ */
+
+/* ── Config Telegram ────────────────────────────────── */
+// Lien vers ton canal/groupe Telegram (à configurer)
+const TELEGRAM_CHANNEL_LINK = 'https://t.me/+LIEN_DE_TON_CANAL';  // ← À remplacer
+
+/* ── Ouvrir Telegram ────────────────────────────────── */
+function openTelegram() {
+  window.open(TELEGRAM_CHANNEL_LINK, '_blank');
+}
+
+/* ── Charger les messages canal ─────────────────────── */
+async function loadCanalMessages() {
+  const listEl = document.getElementById('canal-messages-list');
+  if (!listEl) return;
+
+  listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Chargement…</div></div>';
+
+  const data = await apiGet({ action: 'getCanalMessages' });
+
+  if (!data || data.length === 0) {
+    listEl.innerHTML = renderCanalDefaut();
+    return;
+  }
+
+  listEl.innerHTML = data.map(function(msg) {
+    return renderCanalMessage(msg);
+  }).join('');
+
+  // Bouton compose visible si QSE authentifié
+  const btn = document.getElementById('canal-compose-btn');
+  if (btn && qseAuthenticated) btn.classList.add('visible');
+}
+
+/* ── Rendu message ──────────────────────────────────── */
+function renderCanalMessage(msg) {
+  const icons = { alerte:'🚨', info:'ℹ️', formation:'📚', bravo:'🎉' };
+  const icon  = icons[msg.type] || 'ℹ️';
+  const date  = new Date(msg.date || msg.dateCreation).toLocaleDateString('fr-FR', {
+    day:'2-digit', month:'short', year:'numeric'
+  });
+  return '<div class="canal-msg-card type-' + (msg.type || 'info') + '">'
+    + '<div class="canal-msg-header">'
+    +   '<span class="canal-msg-type">' + icon + ' ' + (msg.type || 'info').toUpperCase() + '</span>'
+    +   '<span class="canal-msg-date">' + date + '</span>'
+    + '</div>'
+    + '<div class="canal-msg-title">' + (msg.titre || msg.title || '') + '</div>'
+    + '<div class="canal-msg-body">' + (msg.message || msg.body || '') + '</div>'
+    + '<div class="canal-msg-author">— Service QSE PIZZORNO</div>'
+    + '</div>';
+}
+
+/* ── Messages de démo si Sheets vide ────────────────── */
+function renderCanalDefaut() {
+  const msgs = [
+    {
+      type: 'alerte',
+      titre: 'Rappel : Port des EPI obligatoire',
+      message: 'Suite à plusieurs observations terrain, nous rappelons que le port des EPI (gants, gilet HV, chaussures de sécurité) est obligatoire en toute circonstance lors des tournées de collecte.',
+      date: new Date(Date.now() - 86400000 * 2).toISOString(),
+    },
+    {
+      type: 'bravo',
+      titre: '🏆 Félicitations à l\'équipe collecte !',
+      message: 'Zéro accident enregistré ce mois-ci sur le secteur Nord. Bravo à toute l\'équipe pour leur vigilance et leur respect des consignes de sécurité. Continuez ainsi !',
+      date: new Date(Date.now() - 86400000 * 5).toISOString(),
+    },
+    {
+      type: 'formation',
+      titre: 'Formation Gestes & Postures — Inscription',
+      message: 'Une session de formation Gestes & Postures est organisée le mois prochain. Les inscriptions sont ouvertes. Contactez votre responsable d\'équipe pour vous inscrire.',
+      date: new Date(Date.now() - 86400000 * 10).toISOString(),
+    },
+    {
+      type: 'info',
+      titre: 'Nouveau : Application SafeZone RPG',
+      message: 'Bienvenue sur SafeZone RPG ! Cette application vous permet de renforcer votre culture sécurité tout en gagnant des points et des récompenses. Créez votre avatar et commencez dès aujourd\'hui !',
+      date: new Date(Date.now() - 86400000 * 15).toISOString(),
+    },
+  ];
+  return msgs.map(function(m) { return renderCanalMessage(m); }).join('');
+}
+
+/* ── Compose message QSE ────────────────────────────── */
+let canalMsgType = 'info';
+
+function openCanalCompose() {
+  canalMsgType = 'info';
+  document.getElementById('canal-msg-titre').value = '';
+  document.getElementById('canal-msg-body').value  = '';
+  document.querySelectorAll('[data-msgtype]').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.msgtype === 'info');
+  });
+  document.getElementById('canal-compose-modal').classList.remove('hidden');
+}
+
+function closeCanalCompose() {
+  document.getElementById('canal-compose-modal').classList.add('hidden');
+}
+
+function selectMsgType(btn, type) {
+  canalMsgType = type;
+  document.querySelectorAll('[data-msgtype]').forEach(function(b) {
+    b.classList.remove('active');
+  });
+  btn.classList.add('active');
+}
+
+async function publishCanalMessage() {
+  const titre = document.getElementById('canal-msg-titre').value.trim();
+  const body  = document.getElementById('canal-msg-body').value.trim();
+  if (!titre || !body) { showToast('✏️ Titre et message obligatoires'); return; }
+
+  const btn = document.querySelector('#canal-compose-modal .signal-submit-btn');
+  btn.disabled = true; btn.textContent = '⏳ Publication…';
+
+  const result = await apiPost({
+    action:  'publishCanalMessage',
+    message: {
+      type:    canalMsgType,
+      titre,
+      message: body,
+      auteur:  PROFILE.pseudo || 'QSE',
+    }
+  });
+
+  btn.disabled = false; btn.textContent = '📣 Publier + Notifier Telegram';
+
+  if (result) {
+    closeCanalCompose();
+    showToast('✅ Message publié' + (result.telegramSent ? ' + Telegram notifié !' : ' !'));
+    loadCanalMessages();
+  } else {
+    showToast('⚠️ Erreur lors de la publication');
   }
 }
