@@ -133,6 +133,120 @@ function showLevelUp(niveau) {
   setTimeout(() => popup.classList.add('hidden'), 3500);
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   S-06 — SYSTÈME DE BADGES
+   Conditions vérifiées à chaque refreshUI + events clés
+═══════════════════════════════════════════════════════ */
+
+const BADGES_DEFS = [
+  // ── Identité ──────────────────────────────────────────
+  { id: 'premier_pas',   icon: '👣', label: 'Premier Pas',    color: 'var(--accent-primary)',
+    desc: 'Créer son profil SafeZone',
+    condition: function(p, stats) { return !!p.pseudo; } },
+  { id: 'stylé',        icon: '🎨', label: 'Stylé',           color: 'var(--accent-purple)',
+    desc: 'Changer la couleur de son bouclier',
+    condition: function(p, stats) { return p.color && p.color !== '#00d4ff'; } },
+
+  // ── XP & Niveaux ──────────────────────────────────────
+  { id: 'apprenti',     icon: '🌱', label: 'Apprenti',        color: '#4ade80',
+    desc: 'Atteindre le niveau 2 (100 XP)',
+    condition: function(p, stats) { return p.niveau >= 2; } },
+  { id: 'confirmé',     icon: '⚡', label: 'Confirmé',        color: 'var(--accent-secondary)',
+    desc: 'Atteindre le niveau 4 (300 XP)',
+    condition: function(p, stats) { return p.niveau >= 4; } },
+  { id: 'expert_badge', icon: '🎯', label: 'Expert',          color: 'var(--accent-primary)',
+    desc: 'Atteindre le niveau 6 (1 000 XP)',
+    condition: function(p, stats) { return p.niveau >= 6; } },
+  { id: 'legende',      icon: '🏆', label: 'Légende',         color: 'var(--accent-secondary)',
+    desc: 'Atteindre le niveau 10 (6 000 XP)',
+    condition: function(p, stats) { return p.niveau >= 10; } },
+
+  // ── Quiz ──────────────────────────────────────────────
+  { id: 'curieux',      icon: '🧠', label: 'Curieux',         color: 'var(--accent-purple)',
+    desc: 'Répondre à son premier quiz',
+    condition: function(p, stats) { return (stats.quizTotal || 0) >= 1; } },
+  { id: 'precise',      icon: '🎯', label: 'Précis',          color: 'var(--accent-success)',
+    desc: 'Réussir 5 quiz',
+    condition: function(p, stats) { return (stats.quizCorrects || 0) >= 5; } },
+  { id: 'crack',        icon: '💡', label: 'Crack Sécurité',  color: 'var(--accent-secondary)',
+    desc: 'Réussir 20 quiz',
+    condition: function(p, stats) { return (stats.quizCorrects || 0) >= 20; } },
+
+  // ── Signalements ──────────────────────────────────────
+  { id: 'vigilant',     icon: '👁️', label: 'Vigilant',        color: '#60a5fa',
+    desc: 'Créer son premier signalement',
+    condition: function(p, stats) { return (stats.signalementsTotal || 0) >= 1; } },
+  { id: 'gardien_badge',icon: '🛡️', label: 'Gardien',         color: 'var(--accent-primary)',
+    desc: 'Créer 5 signalements validés',
+    condition: function(p, stats) { return (stats.signalementsValides || 0) >= 5; } },
+  { id: 'sentinelle_badge',icon:'🔍',label:'Sentinelle',       color: '#34d399',
+    desc: '10 signalements validés',
+    condition: function(p, stats) { return (stats.signalementsValides || 0) >= 10; } },
+
+  // ── Assiduité ─────────────────────────────────────────
+  { id: 'assidu',       icon: '📅', label: 'Assidu',          color: 'var(--accent-secondary)',
+    desc: 'Se connecter 7 jours consécutifs',
+    condition: function(p, stats) { return (stats.streakJours || 0) >= 7; } },
+  { id: 'champion_badge',icon:'🔥', label: 'En Feu',          color: 'var(--accent-danger)',
+    desc: 'Se connecter 30 jours consécutifs',
+    condition: function(p, stats) { return (stats.streakJours || 0) >= 30; } },
+
+  // ── Classement ────────────────────────────────────────
+  { id: 'podium',       icon: '🥉', label: 'Podium',          color: '#cd7f32',
+    desc: 'Terminer dans le top 3 de l'agence',
+    condition: function(p, stats) { return (stats.meilleurePosition || 999) <= 3; } },
+  { id: 'champion_rang',icon:'🥇',  label: 'N°1 de l'agence',color: 'var(--accent-secondary)',
+    desc: 'Être 1er du classement',
+    condition: function(p, stats) { return (stats.meilleurePosition || 999) === 1; } },
+];
+
+// Stats du joueur (alimentées progressivement par les autres sessions)
+function getStats() {
+  try {
+    return JSON.parse(localStorage.getItem('safezone_stats') || '{}');
+  } catch(e) { return {}; }
+}
+function saveStats(stats) {
+  try { localStorage.setItem('safezone_stats', JSON.stringify(stats)); } catch(e) {}
+}
+
+// Vérification des badges + déclenchement nouveauté
+function checkBadges() {
+  const stats    = getStats();
+  const anciens  = PROFILE.badges || [];
+  const nouveaux = [];
+
+  BADGES_DEFS.forEach(function(b) {
+    if (b.condition(PROFILE, stats) && !anciens.includes(b.id)) {
+      nouveaux.push(b.id);
+    }
+  });
+
+  if (nouveaux.length > 0) {
+    PROFILE.badges = anciens.concat(nouveaux);
+    saveProfile(PROFILE);
+    // Affiche le premier badge gagné
+    showBadgePopup(BADGES_DEFS.find(function(b){ return b.id === nouveaux[0]; }));
+    // Synchro Sheets
+    syncToSheets();
+  }
+  return PROFILE.badges;
+}
+
+// Popup badge gagné
+function showBadgePopup(badge) {
+  if (!badge) return;
+  const popup = document.getElementById('badge-popup');
+  if (!popup) return;
+  popup.querySelector('.badge-popup-icon').textContent  = badge.icon;
+  popup.querySelector('.badge-popup-label').textContent = badge.label;
+  popup.querySelector('.badge-popup-desc').textContent  = badge.desc;
+  popup.querySelector('.badge-popup-icon').style.filter = 'drop-shadow(0 0 12px ' + badge.color + ')';
+  popup.classList.remove('hidden');
+  setTimeout(function(){ popup.classList.add('hidden'); }, 3500);
+}
+
 /* ── PROFIL LOCAL ───────────────────────────────────── */
 const DEFAULT_PROFILE = {
   userId:   'local_' + Math.random().toString(36).slice(2,10),
@@ -366,28 +480,29 @@ function refreshUI() {
   if (statRang) statRang.textContent = '#—';
 
   renderBadges();
+  checkBadges();
 }
 
 function renderBadges() {
-  const defs = [
-    {id:'first_avatar', icon:'🎭', label:'Identité',  color:'var(--accent-primary)',   ok:function(){return !!PROFILE.pseudo;}},
-    {id:'first_quiz',   icon:'🎯', label:'Précis',    color:'var(--accent-success)',   ok:function(){return false;}},
-    {id:'first_signal', icon:'⚠️', label:'Vigilant',  color:'var(--accent-secondary)', ok:function(){return false;}},
-    {id:'level5',       icon:'⭐', label:'Niveau 5',  color:'var(--accent-secondary)', ok:function(){return PROFILE.niveau>=5;}},
-    {id:'guardian',     icon:'🛡️', label:'Gardien',   color:'var(--accent-primary)',   ok:function(){return PROFILE.niveau>=4;}},
-  ];
-  const unlocked = defs.filter(function(b){return b.ok();});
+  const stats    = getStats();
+  const unlocked = PROFILE.badges || [];
   const badgesCount = document.getElementById('profile-badges-count');
   const statBadges  = document.getElementById('stat-badges');
   if (badgesCount) badgesCount.textContent = unlocked.length;
   if (statBadges)  statBadges.textContent  = unlocked.length;
   const container = document.getElementById('badges-collection');
   if (!container) return;
-  container.innerHTML = defs.map(function(b){
-    const u = b.ok();
-    return '<div style="text-align:center;flex:0 0 60px;'+(u?'':'opacity:0.2;')+'">'
-      +'<div style="font-size:32px;filter:drop-shadow(0 0 6px '+(u?b.color:'transparent')+')">'+(u?b.icon:'🔒')+'</div>'
-      +'<div style="font-size:9px;color:'+(u?b.color:'var(--text-muted)')+';margin-top:3px;">'+b.label+'</div></div>';
+
+  container.innerHTML = BADGES_DEFS.map(function(b) {
+    const gained  = unlocked.includes(b.id);
+    const inprogress = !gained && b.condition(PROFILE, stats);
+    return '<div class="badge-item' + (gained ? ' badge-gained' : '') + '" title="' + b.desc + '">'
+      + '<div class="badge-item-icon" style="filter:drop-shadow(0 0 ' + (gained?'8px':'0px') + ' ' + b.color + ')">'
+      + (gained ? b.icon : (inprogress ? b.icon : '🔒')) + '</div>'
+      + '<div class="badge-item-label" style="color:' + (gained ? b.color : 'var(--text-muted)') + '">'
+      + b.label + '</div>'
+      + (gained ? '' : '<div class="badge-item-desc">' + b.desc + '</div>')
+      + '</div>';
   }).join('');
 }
 
