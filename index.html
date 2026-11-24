@@ -1229,6 +1229,59 @@
     }
     .canal-compose-btn.visible { display: flex; }
 
+    /* ── S-14 : classement ──────────────────────────────── */
+    .rang-periodes { display: flex; gap: 6px; margin: -6px 0 16px; }
+    .rang-periode {
+      flex: 1; padding: 6px 0; border-radius: 16px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted); font-size: 11px; font-weight: 600; cursor: pointer;
+    }
+    .rang-periode.active { border-color: var(--accent-primary); color: var(--accent-primary); background: rgba(0,212,255,0.08); }
+    .podium-avatar img { width: 100%; height: 100%; object-fit: contain; border-radius: 50%; }
+    .rank-avatar img { width: 100%; height: 100%; object-fit: contain; }
+    .rang-moi-resume { text-align: center; font-size: 12px; color: var(--text-secondary); margin: 4px 0 14px; }
+    .rang-moi-resume b { color: var(--accent-primary); }
+    .agence-ligne .rank-name small { display: block; font-size: 10px; color: var(--text-muted); font-weight: 400; }
+    .agence-note { font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 10px; line-height: 1.4; }
+    .agence-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .agence-btn {
+      padding: 12px 8px; border-radius: var(--radius-md); border: 1px solid var(--border);
+      background: var(--bg-elevated); color: var(--text-secondary); font-weight: 600; font-size: 13px; cursor: pointer;
+    }
+    .agence-btn.selected { border-color: var(--accent-primary); color: var(--accent-primary); background: rgba(0,212,255,0.08); }
+
+    /* ── S-15 : suivi signalements + photo ─────────────── */
+    .sig-suivi-hint { font-size: 10px; color: var(--text-muted); font-weight: 400; text-transform: none; letter-spacing: 0; }
+    .sig-commentaire {
+      margin-top: 6px; font-size: 11px; color: var(--text-secondary); line-height: 1.4;
+      background: rgba(46,213,115,0.07); border-left: 2px solid var(--accent-success); padding: 5px 8px; border-radius: 4px;
+    }
+    #qse-photo-zone { margin: 4px 0 12px; }
+    #qse-photo-zone img { width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border); }
+    .qse-photo-btn {
+      width: 100%; padding: 10px; border-radius: var(--radius-md); border: 1px dashed var(--accent-primary);
+      background: rgba(0,212,255,0.06); color: var(--accent-primary); font-weight: 600; cursor: pointer;
+    }
+
+    /* ── S-16 : récupération ───────────────────────────── */
+    #recup-modal { position: fixed; inset: 0; z-index: 6500; display: flex; align-items: flex-end; }
+    #recup-modal.hidden { display: none; }
+    .recup-texte { font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px; }
+    .recup-actions { display: flex; gap: 8px; }
+    .recup-btn {
+      flex: 1; padding: 11px; border-radius: var(--radius-md); border: none; cursor: pointer; font-weight: 700;
+      background: var(--accent-primary); color: #04121c; font-size: 13px; width: 100%;
+    }
+    .recup-btn.secondaire { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); }
+    .recup-code {
+      font-family: var(--font-mono); font-size: 24px; letter-spacing: 3px; text-align: center; color: var(--accent-secondary);
+      background: var(--bg-elevated); border: 1px dashed var(--accent-secondary); border-radius: var(--radius-md);
+      padding: 16px 8px; margin-bottom: 12px; user-select: all;
+    }
+    .recup-lien {
+      margin-top: 6px; background: none; border: none; padding: 0; cursor: pointer;
+      color: var(--accent-primary); font-size: 11px; text-decoration: underline; text-align: left;
+    }
+
     /* ── S-13 : discussion ─────────────────────────────── */
     .canal-charte {
       font-size: 11px; color: var(--text-muted); line-height: 1.45;
@@ -1420,10 +1473,13 @@
         <div class="card-title">🏅 Collection de Badges</div>
         <div id="badges-collection"></div>
       </div>
-      <div class="coming-soon">
-        <div class="coming-soon-icon">💾</div>
-        <div class="coming-soon-label">Session S-05</div>
-        <div class="coming-soon-text">Sauvegarde profil Google Sheets · Synchronisation multi-appareils</div>
+      <div class="card">
+        <div class="card-title">🔑 Changer de téléphone</div>
+        <div class="recup-texte">Ton profil et ton XP sont liés à ce téléphone. Avant d'en changer (ou de réinitialiser l'app), crée un code de récupération et note-le.</div>
+        <div class="recup-actions">
+          <button class="recup-btn" onclick="ouvrirRecup('creer')">Créer mon code</button>
+          <button class="recup-btn secondaire" onclick="ouvrirRecup('restaurer')">J'ai un code</button>
+        </div>
       </div>
     </section>
 
@@ -1613,7 +1669,7 @@
         </div>
         <!-- Mes signalements récents -->
         <div class="card" style="margin-top:14px;">
-          <div class="card-title">📋 Mes Signalements Récents</div>
+          <div class="card-title">📋 Mes signalements <span class="sig-suivi-hint">· suivi par le QSE</span></div>
           <div id="signal-recent-list">
             <div class="empty-state" style="padding:20px 0;">
               <div class="empty-icon" style="font-size:32px;">📭</div>
@@ -1703,28 +1759,19 @@
       <div class="screen-header">
         <div class="screen-eyebrow">Classement</div>
         <div class="screen-title">Hall of <span>Fame</span></div>
-        <div class="screen-subtitle">Classement de l'agence · Semaine en cours</div>
+        <div class="screen-subtitle" id="rang-subtitle">Chargement…</div>
       </div>
-      <div class="podium">
-        <div class="podium-item"><div class="podium-avatar">😎</div><div class="podium-name">Marie T.</div><div class="podium-pts">2 810 pts</div><div class="podium-plinth">2</div></div>
-        <div class="podium-item"><div class="podium-avatar">🔥</div><div class="podium-name">Thomas R.</div><div class="podium-pts">3 450 pts</div><div class="podium-plinth">1</div></div>
-        <div class="podium-item"><div class="podium-avatar">⭐</div><div class="podium-name">Sarah K.</div><div class="podium-pts">2 560 pts</div><div class="podium-plinth">3</div></div>
+      <div class="quest-tabs">
+        <button class="quest-tab rang-vue active" data-vue="agence">🏢 Mon agence</button>
+        <button class="quest-tab rang-vue" data-vue="agences">🌍 Inter-agences</button>
       </div>
-      <div class="card">
-        <div class="card-title">📊 Classement Complet</div>
-        <div class="rank-row"><div class="rank-pos">4</div><div class="rank-avatar">💪</div><div class="rank-name">Karim B.</div><div class="rank-pts">2 310 pts</div></div>
-        <div class="rank-row"><div class="rank-pos">5</div><div class="rank-avatar">🎯</div><div class="rank-name">Nadia M.</div><div class="rank-pts">2 180 pts</div></div>
-        <div class="rank-row me" id="my-rank-row">
-          <div class="rank-pos" style="color:var(--accent-primary)">#</div>
-          <div class="rank-avatar" id="rank-my-avatar" style="border-color:var(--accent-primary);"><img src="avatars/recrue.png" style="width:100%;height:100%;object-fit:contain;" /></div>
-          <div class="rank-name" style="color:var(--accent-primary)" id="rank-my-name">Mon Héros (Moi)</div>
-          <div class="rank-pts" id="rank-my-pts">0 pts</div>
-        </div>
+      <div class="rang-periodes">
+        <button class="rang-periode active" data-periode="semaine">Semaine</button>
+        <button class="rang-periode" data-periode="mois">Mois</button>
+        <button class="rang-periode" data-periode="tout">Général</button>
       </div>
-      <div class="coming-soon">
-        <div class="coming-soon-icon">📡</div>
-        <div class="coming-soon-label">Session S-13</div>
-        <div class="coming-soon-text">Classement temps réel · Filtres période · Google Sheets sync</div>
+      <div id="rang-contenu">
+        <div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Chargement…</div></div>
       </div>
     </section>
     <!-- ── CANAL QSE ─────────────────────────────────── -->
@@ -1759,9 +1806,9 @@
     <button class="nav-item active" onclick="navigate('hero',this)" data-screen="hero"><span class="nav-icon">🦺</span><span class="nav-label">Héros</span></button>
     <button class="nav-item" onclick="navigate('profil',this)" data-screen="profil"><span class="nav-icon">👤</span><span class="nav-label">Profil</span></button>
     <button class="nav-item" onclick="navigate('quetes',this);renderQuetes();" data-screen="quetes"><span class="nav-icon">⚔️</span><span class="nav-label">Quêtes</span><span class="nav-badge">3</span></button>
-    <button class="nav-item nav-signal" onclick="navigate('signaler',this);showSignalView('home');renderRecentSignalements();" data-screen="signaler"><div class="nav-icon-wrap"><span class="nav-icon">🚨</span></div><span class="nav-label">Signaler</span></button>
+    <button class="nav-item nav-signal" onclick="navigate('signaler',this);showSignalView('home');renderRecentSignalements();chargerMesSignalements(true);" data-screen="signaler"><div class="nav-icon-wrap"><span class="nav-icon">🚨</span></div><span class="nav-label">Signaler</span></button>
     <button class="nav-item" onclick="navigate('defi',this);showQuizView('home');updateQuizHomeStats();" data-screen="defi"><span class="nav-icon">🧠</span><span class="nav-label">Défi</span></button>
-    <button class="nav-item" onclick="navigate('rang',this)" data-screen="rang"><span class="nav-icon">🏆</span><span class="nav-label">Rang</span></button>
+    <button class="nav-item" onclick="navigate('rang',this);ouvrirClassement();" data-screen="rang"><span class="nav-icon">🏆</span><span class="nav-label">Rang</span></button>
     <button class="nav-item" onclick="navigate('canal',this);ouvrirCanal();" data-screen="canal"><span class="nav-icon">💬</span><span class="nav-label">Canal</span><span class="nav-badge" id="canal-badge" style="display:none"></span></button>
   </nav>
 
@@ -1780,6 +1827,7 @@
     <div>
       <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent-primary);letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">Session S-04</div>
       <div class="avatar-creator-title">Créer mon <span>Avatar</span></div>
+      <button class="recup-lien" id="recup-lien-avatar" onclick="ouvrirRecup('restaurer')">🔄 J'ai déjà un profil sur un autre téléphone</button>
     </div>
     <button class="avatar-close-btn" onclick="closeAvatarCreator()">✕</button>
   </div>
@@ -1812,6 +1860,14 @@
   <div class="avatar-section">
     <div class="avatar-section-title">🎨 Couleur du bouclier</div>
     <div class="avatar-color-grid" id="color-grid">
+      <!-- généré par JS -->
+    </div>
+  </div>
+
+  <!-- S-14 : Agence -->
+  <div class="avatar-section">
+    <div class="avatar-section-title">🏢 Ton agence <span class="signal-required">*</span></div>
+    <div class="agence-grid" id="agence-grid">
       <!-- généré par JS -->
     </div>
   </div>
@@ -1937,6 +1993,7 @@
       <button class="avatar-close-btn" onclick="closeQSEDetail()">✕</button>
     </div>
     <div class="qse-modal-body" id="qse-modal-body"></div>
+    <div id="qse-photo-zone"></div>
     <div class="qse-modal-actions">
       <div class="signal-field">
         <label class="signal-label">💬 Commentaire QSE</label>
@@ -1986,6 +2043,27 @@
   </div>
 </div>
 
-<script src="app.js?v=15"></script>
+<!-- S-16 : Récupération de profil -->
+<div id="recup-modal" class="hidden">
+  <div class="qse-modal-backdrop" onclick="fermerRecup()"></div>
+  <div class="qse-modal-card">
+    <div class="qse-modal-header">
+      <div class="qse-modal-title" id="recup-titre">🔑 Code de récupération</div>
+      <button class="avatar-close-btn" onclick="fermerRecup()">✕</button>
+    </div>
+    <div id="recup-vue-creer">
+      <div class="recup-texte">Ce code permet de retrouver ton profil (pseudo, XP, badges) sur un autre téléphone. Il ne s'affiche <b>qu'une seule fois</b> et remplace le précédent. Garde-le pour toi.</div>
+      <div class="recup-code" id="recup-code">—</div>
+      <button class="recup-btn" id="recup-copier" onclick="copierCodeRecup()">📋 Copier</button>
+    </div>
+    <div id="recup-vue-restaurer">
+      <div class="recup-texte">Saisis le code créé sur ton ancien téléphone. Ce téléphone deviendra le seul à accéder à ton profil.</div>
+      <input type="text" id="recup-saisie" class="signal-input" placeholder="XXXX-XXXX-XXXX" maxlength="16" autocomplete="off" autocapitalize="characters" style="width:100%;text-transform:uppercase;letter-spacing:2px;text-align:center;font-family:var(--font-mono);" />
+      <button class="signal-submit-btn" id="recup-valider" onclick="validerRecup()" style="margin-top:12px;">🔄 Récupérer mon profil</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=16"></script>
 </body>
 </html>

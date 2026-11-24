@@ -33,6 +33,11 @@ const API_ERREURS = {
   limite_messages_jour:  '✋ Limite de messages atteinte pour aujourd\'hui',
   message_vide:          '✏️ Message vide',
   message_incomplet:     '✏️ Titre et message obligatoires',
+  photo_invalide:        '📷 Photo non reconnue, réessaie',
+  photo_trop_lourde:     '📷 Photo trop lourde',
+  code_invalide:         '❌ Code de récupération incorrect',
+  pas_de_photo:          '📷 Pas de photo pour ce signalement',
+  requete_trop_grande:   '📷 Photo trop lourde',
 };
 function messageErreur(code) { return API_ERREURS[code] || '⚠️ Erreur réseau'; }
 
@@ -103,6 +108,7 @@ async function syncToSheets(silent = true) {
         quetes:  PROFILE.quetes,
         color:   PROFILE.color,
         classe:  PROFILE.classe,
+        agence:  PROFILE.agence || '',
       }
     });
     const data = rep.ok ? rep.data : null;
@@ -147,6 +153,7 @@ async function loadFromSheets() {
       avatar:  avatarOk ? avatarOk.img : PROFILE.avatar,
       avatarId: avatarOk ? avatarOk.id : PROFILE.avatarId,
       color:   couleurValide(data.color) ? data.color : PROFILE.color,
+      agence:  agenceValide(data.agence) ? data.agence : (PROFILE.agence || ''),
       xp:      xpFinal,
       niveau:  niveauFinal,
       badges:  data.badges  || PROFILE.badges,
@@ -364,6 +371,15 @@ function avatarSrc(p) {
   return a.img;
 }
 
+const AGENCES = [
+  { id:'Lyon',     label:'Lyon · Vénissieux' },
+  { id:'Valence',  label:'Valence' },
+  { id:'Grenoble', label:'Grenoble' },
+  { id:'Autre',    label:'Autre site' },
+];
+function agenceValide(a) { return AGENCES.some(function(x){ return x.id === a; }); }
+function libelleAgence(a) { const x = AGENCES.find(function(y){ return y.id === a; }); return x ? x.label : ''; }
+
 /* ── AVATAR CREATOR STATE ───────────────────────────── */
 let tempAvatar = {};
 
@@ -374,8 +390,12 @@ function openAvatarCreator() {
     avatar:   PROFILE.avatar   || 'avatars/recrue.png',
     color:    PROFILE.color,
     classe:   PROFILE.classe,
+    agence:   PROFILE.agence || '',
   };
   document.getElementById('avatar-pseudo-input').value = PROFILE.pseudo;
+  renderAgenceGrid();
+  const lienRecup = document.getElementById('recup-lien-avatar');
+  if (lienRecup) lienRecup.style.display = PROFILE.pseudo ? 'none' : 'inline-block';
   renderCharGrid();
   renderColorGrid();
   renderClassGrid();
@@ -471,6 +491,20 @@ function selectColor(color, btn) {
   updatePreview();
 }
 
+function renderAgenceGrid() {
+  const grid = document.getElementById('agence-grid');
+  if (!grid) return;
+  grid.innerHTML = AGENCES.map(function(a) {
+    return '<button class="agence-btn' + (tempAvatar.agence === a.id ? ' selected' : '') + '" data-agence="' + a.id + '">' + a.label + '</button>';
+  }).join('');
+  grid.querySelectorAll('.agence-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      tempAvatar.agence = b.dataset.agence;
+      grid.querySelectorAll('.agence-btn').forEach(function(x){ x.classList.toggle('selected', x === b); });
+    });
+  });
+}
+
 function selectClass(classeId, btn) {
   tempAvatar.classe = classeId;
   document.querySelectorAll('.avatar-class-btn').forEach(function(b) {
@@ -485,6 +519,7 @@ function selectClass(classeId, btn) {
 
 async function saveAvatar() {
   if (!tempAvatar.pseudo) { showToast('✏️ Entre ton pseudo héros !'); document.getElementById('avatar-pseudo-input').focus(); return; }
+  if (!agenceValide(tempAvatar.agence)) { showToast('🏢 Choisis ton agence'); const g = document.getElementById('agence-grid'); if (g) g.scrollIntoView({behavior:'smooth', block:'center'}); return; }
   const btn = document.getElementById('avatar-save-btn');
   btn.classList.add('saving'); btn.textContent = '⏳ Sauvegarde…';
   const isFirstTime = !PROFILE.pseudo;
@@ -493,6 +528,7 @@ async function saveAvatar() {
   PROFILE.avatar   = tempAvatar.avatar;
   PROFILE.color    = tempAvatar.color;
   PROFILE.classe   = tempAvatar.classe;
+  PROFILE.agence   = tempAvatar.agence;
   if (isFirstTime) { PROFILE.xp += 25; PROFILE.niveau = calcNiveau(PROFILE.xp); }
   saveProfile(PROFILE);
   refreshUI();
@@ -545,9 +581,7 @@ function refreshUI() {
   const ring = document.querySelector('.profile-avatar-ring');
   if (ring) ring.style.background = 'conic-gradient('+(couleurValide(p.color)?p.color:'#00d4ff')+' '+xpPct+'%, #1c2d3e '+xpPct+'%)';
 
-  document.getElementById('rank-my-avatar').innerHTML  = img;
-  document.getElementById('rank-my-name').textContent  = (p.pseudo||'Mon Héros')+' (Moi)';
-  document.getElementById('rank-my-pts').textContent   = p.xp.toLocaleString('fr-FR')+' pts';
+  // (S-14) l'ancienne ligne « Moi » de l'écran Rang est remplacée par le classement réel
 
   // Stats héros
   const statRang = document.getElementById('stat-rang');
@@ -1426,16 +1460,39 @@ function handlePhotoSelect(input) {
   if (!input.files || !input.files[0]) return;
   const file   = input.files[0];
   const reader = new FileReader();
-  reader.onload = function(e) {
-    signalState.photoData = e.target.result;
+  reader.onload = async function(e) {
+    // S-15 : photo réduite (1280 px, JPEG) avant envoi ; le réencodage retire aussi la position GPS de la photo
+    let data;
+    try { data = await compresserPhoto(e.target.result); }
+    catch (err) { showToast('⚠️ Photo illisible, essaie une autre image'); return; }
+    signalState.photoData = data;
     const preview = document.getElementById('signal-photo-preview');
     const placeholder = document.getElementById('signal-photo-placeholder');
-    preview.src = e.target.result;
+    preview.src = data;
     preview.style.display = 'block';
     placeholder.style.display = 'none';
     document.getElementById('signal-photo-zone').classList.add('has-photo');
   };
   reader.readAsDataURL(file);
+}
+
+function compresserPhoto(dataUrl) {
+  return new Promise(function(resolve, reject) {
+    const img = new Image();
+    img.onload = function() {
+      const max = 1280;
+      const ratio = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * ratio); c.height = Math.round(img.height * ratio);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      let q = 0.72, out = c.toDataURL('image/jpeg', q);
+      while (out.length > 1300000 && q > 0.3) { q -= 0.12; out = c.toDataURL('image/jpeg', q); }
+      if (out.length > 1350000) return reject(new Error('trop lourde'));
+      resolve(out);
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
 }
 
 /* ── Priorité ───────────────────────────────────────── */
@@ -1469,7 +1526,7 @@ async function submitSignalement() {
     categorie:    cfg.label,
     description:  desc,
     localisation: loc,
-    photo:        signalState.photoData ? '📷 Photo jointe' : '',
+    photoData:    signalState.photoData || '',
     priorite:     signalState.priorite,
   };
 
@@ -1506,6 +1563,7 @@ async function submitSignalement() {
     checkBadges();
     checkQuetes();
     syncToSheets();
+    chargerMesSignalements(true);
 
     // Écran confirmation
     document.getElementById('signal-confirm-xp').textContent = '+' + xpGagne + ' XP';
@@ -1530,33 +1588,67 @@ function getSignalementsLocaux() {
   catch(e) { return []; }
 }
 
-/* ── Rendu liste récente ────────────────────────────── */
-function renderRecentSignalements() {
-  const list   = getSignalementsLocaux();
-  const el     = document.getElementById('signal-recent-list');
-  if (!el) return;
+/* ── S-15 : Mes signalements (statut suivi par le QSE) ── */
+let MES_SIGNALEMENTS = null;
+const SIG_STATUTS_KEY = 'safezone_sig_statuts';
+const STATUT_LIBELLES = { 'nouveau':'Nouveau', 'en-cours':'En cours', 'résolu':'Résolu', 'rejeté':'Clôturé' };
 
-  if (list.length === 0) {
+async function chargerMesSignalements(silencieux) {
+  if (!PROFILE.pseudo) return;
+  const rep = await apiJoueur('getMesSignalements');
+  if (!rep.ok) return;
+  MES_SIGNALEMENTS = rep.data || [];
+
+  // Détection des changements de statut depuis la dernière visite
+  let connus = {};
+  try { connus = JSON.parse(localStorage.getItem(SIG_STATUTS_KEY) || '{}'); } catch(e) {}
+  const premiere = !Object.keys(connus).length;
+  const resolus = MES_SIGNALEMENTS.filter(function(x){ return x.statut === 'résolu' && connus[x.sigId] && connus[x.sigId] !== 'résolu'; });
+  const encours = MES_SIGNALEMENTS.filter(function(x){ return x.statut === 'en-cours' && connus[x.sigId] === 'nouveau'; });
+  const nouveauxConnus = {};
+  MES_SIGNALEMENTS.forEach(function(x){ nouveauxConnus[x.sigId] = x.statut; });
+  try { localStorage.setItem(SIG_STATUTS_KEY, JSON.stringify(nouveauxConnus)); } catch(e) {}
+
+  const stats = getStats();
+  stats.signalementsValides = MES_SIGNALEMENTS.filter(function(x){ return x.statut === 'résolu'; }).length;
+  saveStats(stats);
+
+  if (!premiere && resolus.length) {
+    showToast('✅ ' + (resolus.length > 1 ? resolus.length + ' signalements résolus' : 'Ton signalement a été résolu') + ' par le QSE ! +50 XP');
+    loadFromSheets();
+  } else if (!premiere && encours.length) {
+    showToast('🔄 Le QSE a pris en charge ton signalement');
+  }
+  checkBadges();
+  renderRecentSignalements();
+}
+
+function renderRecentSignalements() {
+  const el = document.getElementById('signal-recent-list');
+  if (!el) return;
+  const list = MES_SIGNALEMENTS !== null ? MES_SIGNALEMENTS : getSignalementsLocaux().map(function(x) {
+    return { sigId: x.sigId, date: x.date, categorie: x.categorie, description: x.description, statut: x.statut, xpGagne: x.xpGagne };
+  });
+
+  if (!list.length) {
     el.innerHTML = '<div class="empty-state" style="padding:20px 0;">'
       + '<div class="empty-icon" style="font-size:32px;">📭</div>'
       + '<div class="empty-text">Aucun signalement pour l\'instant</div></div>';
     return;
   }
 
-  const icons = { urgence:'🚨', danger:'⚠️', equipement:'🔧', presqueaccident:'💡', bonnepratique:'👍' };
-
-  el.innerHTML = list.slice(0, 5).map(function(s) {
+  el.innerHTML = list.slice(0, 8).map(function(s) {
     const date = new Date(s.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
-    const statut = ['nouveau','en-cours','résolu','rejeté'].indexOf(s.statut) >= 0 ? s.statut : 'nouveau';
-    const statusClass = 'status-' + statut;
+    const statut = STATUT_LIBELLES.hasOwnProperty(s.statut) ? s.statut : 'nouveau';
     const descr = String(s.description || '');
     return '<div class="signal-recent-item">'
-      + '<div class="signal-recent-icon">⚠️</div>'
+      + '<div class="signal-recent-icon">' + (statut === 'résolu' ? '✅' : statut === 'en-cours' ? '🔄' : '⚠️') + '</div>'
       + '<div class="signal-recent-body">'
       +   '<div class="signal-recent-desc">' + esc(descr.slice(0, 60)) + (descr.length > 60 ? '…' : '') + '</div>'
-      +   '<div class="signal-recent-meta">' + esc(date) + ' · +' + (Number(s.xpGagne) || 0) + ' XP</div>'
+      +   '<div class="signal-recent-meta">' + esc(date) + ' · +' + (Number(s.xpGagne) || 0) + ' XP' + (s.photo ? ' · 📷' : '') + '</div>'
+      +   (s.commentaireQSE ? '<div class="sig-commentaire">💬 QSE : ' + esc(s.commentaireQSE) + '</div>' : '')
       + '</div>'
-      + '<span class="signal-recent-status ' + statusClass + '">' + esc(statut) + '</span>'
+      + '<span class="signal-recent-status status-' + statut + '">' + STATUT_LIBELLES[statut] + '</span>'
       + '</div>';
   }).join('');
 }
@@ -1740,7 +1832,7 @@ function renderQSEList(data, filter) {
       + '<div class="qse-signal-meta">' + esc(date) + ' · ' + esc(s.localisation || 'Localisation non renseignée') + '</div>'
       + '<div class="qse-signal-desc">' + esc(descr.slice(0, 100)) + (descr.length > 100 ? '…' : '') + '</div>'
       + '<div class="qse-signal-footer">'
-      +   '<div class="qse-signal-who">👤 ' + esc(s.pseudo || s.userId) + '</div>'
+      +   '<div class="qse-signal-who">👤 ' + esc(s.pseudo || s.userId) + (s.photo === 'drive' ? ' · 📷' : '') + '</div>'
       +   (priorityTag[s.priorite] || '')
       + '</div>'
       + '</div>';
@@ -1770,6 +1862,26 @@ function openQSEDetail(sigId) {
   + '<div class="qse-detail-row"><div class="qse-detail-label">📅 Date</div><div class="qse-detail-val">' + esc(date) + '</div></div>'
   + '<div class="qse-detail-row"><div class="qse-detail-label">🎯 Priorité</div><div class="qse-detail-val">' + esc(s.priorite || 'normale') + '</div></div>'
   + (s.commentaireQSE ? '<div class="qse-detail-row"><div class="qse-detail-label">💬 Commentaire QSE précédent</div><div class="qse-detail-val">' + esc(s.commentaireQSE) + '</div></div>' : '');
+
+  const zonePhoto = document.getElementById('qse-photo-zone');
+  if (zonePhoto) {
+    zonePhoto.innerHTML = s.photo === 'drive' ? '<button class="qse-photo-btn" id="qse-photo-btn">📷 Voir la photo</button>' : '';
+    const b = document.getElementById('qse-photo-btn');
+    if (b) b.addEventListener('click', async function() {
+      b.disabled = true; b.textContent = '⏳ Chargement de la photo…';
+      const rep = await apiQSE('getPhotoSignalement', { sigId: s.sigId });
+      if (rep.ok && /^data:image\/jpeg;base64,/.test(rep.data.dataUrl)) {
+        zonePhoto.innerHTML = '';
+        const img = document.createElement('img');
+        img.alt = 'Photo du signalement';
+        img.src = rep.data.dataUrl;
+        zonePhoto.appendChild(img);
+      } else {
+        b.disabled = false; b.textContent = '📷 Voir la photo';
+        showToast(messageErreur(rep.error));
+      }
+    });
+  }
 
   document.getElementById('qse-detail-modal').classList.remove('hidden');
 }
@@ -2074,3 +2186,214 @@ async function publishCanalMessage() {
     showToast(messageErreur(rep.error));
   }
 }
+
+
+/* ═══════════════════════════════════════════════════════
+   S-14 — CLASSEMENT RÉEL (par agence + inter-agences)
+═══════════════════════════════════════════════════════ */
+const RANG = { vue: 'agence', periode: 'semaine', donnees: {} };
+const PERIODE_LIBELLES = { semaine: 'Semaine en cours', mois: 'Mois en cours', tout: 'Depuis le début' };
+
+function ouvrirClassement() {
+  renderClassement();
+  chargerClassement(RANG.periode, false);
+}
+
+async function chargerClassement(periode, silencieux) {
+  if (!PROFILE.pseudo) { renderClassement(); return; }
+  const rep = await apiJoueur('getClassement', { periode: periode });
+  if (!rep.ok) {
+    if (!silencieux && periode === RANG.periode) {
+      const el = document.getElementById('rang-contenu');
+      if (el && !RANG.donnees[periode]) el.innerHTML = '<div class="empty-state"><div class="empty-icon">📴</div><div class="empty-title">' + esc(messageErreur(rep.error)) + '</div></div>';
+    }
+    return;
+  }
+  RANG.donnees[periode] = rep.data;
+  majRangPersonnel(rep.data);
+  const ecran = document.getElementById('screen-rang');
+  if (periode === RANG.periode && ecran && ecran.classList.contains('active')) renderClassement();
+}
+
+function majRangPersonnel(d) {
+  if (d.periode === 'semaine') {
+    const el = document.getElementById('stat-rang');
+    if (el) el.textContent = d.moi && d.moi.points > 0 ? '#' + d.moi.rang : '#—';
+  }
+  // Badges podium / n°1 : seulement s'il y a une vraie compétition (3 joueurs actifs ou plus)
+  const actifs = (d.joueurs || []).filter(function(j){ return j.points > 0; }).length;
+  if (d.moi && d.moi.points > 0 && actifs >= 3 && d.periode !== 'tout') {
+    const stats = getStats();
+    if (!stats.meilleurePosition || d.moi.rang < stats.meilleurePosition) {
+      stats.meilleurePosition = d.moi.rang;
+      saveStats(stats);
+      checkBadges();
+    }
+  }
+}
+
+function avatarImg(id) {
+  const a = avatarParId(id) || AVATARS[0];
+  return '<img src="' + esc(a.img) + '" alt="" />';
+}
+
+function renderClassement() {
+  const el  = document.getElementById('rang-contenu');
+  const sub = document.getElementById('rang-subtitle');
+  if (!el) return;
+  document.querySelectorAll('.rang-vue').forEach(function(b){ b.classList.toggle('active', b.dataset.vue === RANG.vue); });
+  document.querySelectorAll('.rang-periode').forEach(function(b){ b.classList.toggle('active', b.dataset.periode === RANG.periode); });
+
+  if (!PROFILE.pseudo) {
+    if (sub) sub.textContent = PERIODE_LIBELLES[RANG.periode];
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🦸</div><div class="empty-title">Crée ton avatar pour entrer dans le classement</div>'
+      + '<button class="canal-join-btn" onclick="openAvatarCreator()">Créer mon avatar</button></div>';
+    return;
+  }
+  const d = RANG.donnees[RANG.periode];
+  if (!d) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Chargement…</div></div>'; return; }
+
+  if (RANG.vue === 'agences') {
+    if (sub) sub.textContent = 'Inter-agences · ' + PERIODE_LIBELLES[RANG.periode];
+    el.innerHTML = '<div class="card"><div class="card-title">🌍 Moyenne de points par agent actif</div>'
+      + d.agences.map(function(a, i) {
+          const mine = a.agence === d.monAgence;
+          return '<div class="rank-row agence-ligne' + (mine ? ' me' : '') + '">'
+            + '<div class="rank-pos">' + (i + 1) + '</div>'
+            + '<div class="rank-avatar">' + (i === 0 && a.moyenne > 0 ? '🏆' : '🏢') + '</div>'
+            + '<div class="rank-name">' + esc(libelleAgence(a.agence) || a.agence) + (mine ? ' (moi)' : '')
+            +   '<small>' + a.actifs + ' actif' + (a.actifs > 1 ? 's' : '') + ' sur ' + a.inscrits + ' inscrit' + (a.inscrits > 1 ? 's' : '') + '</small></div>'
+            + '<div class="rank-pts">' + a.moyenne.toLocaleString('fr-FR') + ' pts</div>'
+            + '</div>';
+        }).join('')
+      + '<div class="agence-note">La moyenne ne compte que les agents qui ont gagné des points sur la période : une petite agence n\'est pas désavantagée.</div></div>';
+    return;
+  }
+
+  if (!d.monAgence) {
+    if (sub) sub.textContent = PERIODE_LIBELLES[RANG.periode];
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🏢</div><div class="empty-title">Choisis ton agence pour voir ton classement</div>'
+      + '<button class="canal-join-btn" onclick="openAvatarCreator()">Choisir mon agence</button></div>';
+    return;
+  }
+  if (sub) sub.textContent = libelleAgence(d.monAgence) + ' · ' + PERIODE_LIBELLES[RANG.periode];
+
+  const joueurs = d.joueurs || [];
+  if (!joueurs.some(function(j){ return j.points > 0; })) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🏁</div><div class="empty-title">Personne n\'a encore marqué de points sur cette période</div>'
+      + '<div class="empty-text">Un quiz ou un signalement, et tu prends la tête !</div></div>';
+    return;
+  }
+
+  const top = joueurs.slice(0, 3);
+  const ordre = [top[1], top[0], top[2]];   // podium : 2e, 1er, 3e
+  const podium = '<div class="podium">' + ordre.map(function(j, i) {
+    if (!j) return '<div class="podium-item" style="visibility:hidden"><div class="podium-avatar"></div><div class="podium-plinth"></div></div>';
+    return '<div class="podium-item">'
+      + '<div class="podium-avatar">' + avatarImg(j.avatar) + '</div>'
+      + '<div class="podium-name">' + esc(j.pseudo) + (j.moi ? ' (moi)' : '') + '</div>'
+      + '<div class="podium-pts">' + j.points.toLocaleString('fr-FR') + ' pts</div>'
+      + '<div class="podium-plinth">' + [2, 1, 3][i] + '</div>'
+      + '</div>';
+  }).join('') + '</div>';
+
+  const resume = d.moi
+    ? '<div class="rang-moi-resume">Ta position : <b>#' + d.moi.rang + '</b> sur ' + d.total + ' · ' + d.moi.points.toLocaleString('fr-FR') + ' pts</div>'
+    : '';
+
+  const reste = joueurs.slice(3);
+  let lignes = reste.map(function(j) {
+    return '<div class="rank-row' + (j.moi ? ' me' : '') + '">'
+      + '<div class="rank-pos">' + j.rang + '</div>'
+      + '<div class="rank-avatar">' + avatarImg(j.avatar) + '</div>'
+      + '<div class="rank-name">' + esc(j.pseudo) + (j.moi ? ' (moi)' : '') + '</div>'
+      + '<div class="rank-pts">' + j.points.toLocaleString('fr-FR') + ' pts</div>'
+      + '</div>';
+  }).join('');
+  if (d.moi && d.moi.rang > joueurs.length) {
+    lignes += '<div class="rank-row me"><div class="rank-pos">' + d.moi.rang + '</div><div class="rank-avatar">' + avatarImg(PROFILE.avatarId)
+      + '</div><div class="rank-name">' + esc(PROFILE.pseudo) + ' (moi)</div><div class="rank-pts">' + d.moi.points.toLocaleString('fr-FR') + ' pts</div></div>';
+  }
+  el.innerHTML = podium + resume + (lignes ? '<div class="card"><div class="card-title">📊 Classement complet</div>' + lignes + '</div>' : '');
+}
+
+function demarrerClassement() {
+  document.querySelectorAll('.rang-vue').forEach(function(b) {
+    b.addEventListener('click', function() { RANG.vue = b.dataset.vue; renderClassement(); });
+  });
+  document.querySelectorAll('.rang-periode').forEach(function(b) {
+    b.addEventListener('click', function() {
+      RANG.periode = b.dataset.periode;
+      renderClassement();
+      chargerClassement(RANG.periode, false);
+    });
+  });
+  setTimeout(function() {
+    if (navigator.onLine && PROFILE.pseudo) { chargerClassement('semaine', true); chargerMesSignalements(true); }
+  }, 3500);
+}
+
+/* ═══════════════════════════════════════════════════════
+   S-16 — RÉCUPÉRATION DE PROFIL
+═══════════════════════════════════════════════════════ */
+function ouvrirRecup(mode) {
+  const modal = document.getElementById('recup-modal');
+  document.getElementById('recup-vue-creer').style.display     = mode === 'creer' ? 'block' : 'none';
+  document.getElementById('recup-vue-restaurer').style.display = mode === 'restaurer' ? 'block' : 'none';
+  document.getElementById('recup-titre').textContent = mode === 'creer' ? '🔑 Mon code de récupération' : '🔄 Récupérer mon profil';
+  if (mode === 'creer') {
+    if (!PROFILE.pseudo) { showToast('👤 Crée d\'abord ton avatar'); return; }
+    document.getElementById('recup-code').textContent = '⏳';
+    document.getElementById('recup-copier').disabled = true;
+    apiJoueur('creerCodeRecup').then(function(rep) {
+      if (!rep.ok) { fermerRecup(); showToast(messageErreur(rep.error)); return; }
+      document.getElementById('recup-code').textContent = rep.data.code;
+      document.getElementById('recup-copier').disabled = false;
+    });
+  } else {
+    document.getElementById('recup-saisie').value = '';
+  }
+  modal.classList.remove('hidden');
+}
+
+function fermerRecup() {
+  document.getElementById('recup-modal').classList.add('hidden');
+  document.getElementById('recup-code').textContent = '—';   // le code ne reste pas affiché
+}
+
+function copierCodeRecup() {
+  const code = document.getElementById('recup-code').textContent;
+  try {
+    navigator.clipboard.writeText(code).then(function(){ showToast('📋 Code copié'); }, function(){ showToast('Note le code à la main'); });
+  } catch(e) { showToast('Note le code à la main'); }
+}
+
+async function validerRecup() {
+  const code = document.getElementById('recup-saisie').value.trim();
+  if (code.replace(/[^A-Za-z0-9]/g, '').length !== 12) { showToast('✏️ Le code contient 12 caractères'); return; }
+  const btn = document.getElementById('recup-valider');
+  btn.disabled = true; btn.textContent = '⏳ Vérification…';
+  const rep = await apiCall({ action: 'recupererProfil', code: code, secret: PROFILE.secret });
+  btn.disabled = false; btn.textContent = '🔄 Récupérer mon profil';
+  if (!rep.ok) { showToast(messageErreur(rep.error)); return; }
+  const d = rep.data;
+  const a = avatarParId(d.avatar) || AVATARS[0];
+  PROFILE = Object.assign({}, PROFILE, {
+    userId: d.userId, pseudo: d.pseudo, avatarId: a.id, avatar: a.img,
+    color: couleurValide(d.color) ? d.color : PROFILE.color, classe: d.classe || 'recrue',
+    agence: agenceValide(d.agence) ? d.agence : '', xp: Number(d.xp) || 0, niveau: calcNiveau(Number(d.xp) || 0),
+    badges: Array.isArray(d.badges) ? d.badges : [], quetes: Array.isArray(d.quetes) ? d.quetes : [],
+    dateInscription: d.dateInscription || PROFILE.dateInscription, lastSync: new Date().toISOString(),
+  });
+  saveProfile(PROFILE);
+  try { localStorage.removeItem(SIG_STATUTS_KEY); } catch(e) {}
+  MES_SIGNALEMENTS = null; RANG.donnees = {}; CANAL_ITEMS = []; canalCharge = false;
+  fermerRecup();
+  closeAvatarCreator();
+  refreshUI();
+  showToast('✅ Profil récupéré : bon retour ' + d.pseudo + ' !');
+  chargerMesSignalements(true); chargerClassement('semaine', true); chargerCanal(true);
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrerClassement);
+else demarrerClassement();
