@@ -29,6 +29,10 @@ const API_ERREURS = {
   description_trop_courte:'✏️ Description trop courte',
   pseudo_invalide:       '✏️ Pseudo invalide (2 à 24 caractères)',
   profil_inexistant:     '👤 Crée d\'abord ton avatar',
+  trop_rapide_chat:      '⏳ Patiente quelques secondes avant le prochain message',
+  limite_messages_jour:  '✋ Limite de messages atteinte pour aujourd\'hui',
+  message_vide:          '✏️ Message vide',
+  message_incomplet:     '✏️ Titre et message obligatoires',
 };
 function messageErreur(code) { return API_ERREURS[code] || '⚠️ Erreur réseau'; }
 
@@ -604,6 +608,9 @@ function navigate(screenId, el) {
   if (t) { t.classList.add('active'); document.getElementById('screens').scrollTop=0; }
   document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
   if (el) el.classList.add('active');
+  const annonceBtn = document.getElementById('canal-compose-btn');
+  if (annonceBtn) annonceBtn.classList.toggle('visible', screenId === 'canal' && qseAuthenticated);
+  if (screenId !== 'canal' && typeof majBadgeCanal === 'function') majBadgeCanal();
 }
 function switchQuestTab(el, tab) {
   document.querySelectorAll('.quest-tab').forEach(function(t){t.classList.remove('active');});
@@ -1596,6 +1603,7 @@ function qseDeconnecter(expire) {
   const btn = document.getElementById('canal-compose-btn');
   if (btn) btn.classList.remove('visible');
   if (expire) showToast('🔒 Session QSE expirée, ressaisis le code');
+  if (typeof chargerCanal === 'function') setTimeout(function(){ chargerCanal(true); }, 0);
 }
 let qseCurrentFilter = '';
 let qseSignalementsCache = [];
@@ -1644,6 +1652,7 @@ async function verifierPinQSE(pin) {
     QSE_TOKEN = rep.data.token;
     qseAuthenticated = true;
     try { sessionStorage.setItem('safezone_qse_token', QSE_TOKEN); } catch(e) {}
+    if (typeof chargerCanal === 'function') chargerCanal(true);
     document.getElementById('qse-pin-gate').style.display  = 'none';
     document.getElementById('qse-dashboard').style.display = 'flex';
     loadQSESignalements();
@@ -1805,91 +1814,213 @@ async function updateStatut(statut) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   S-12 — CANAL QSE + TELEGRAM
-   Messages QSE → stockés dans Sheets + envoyés via Telegram
+   S-13 — CANAL : DISCUSSION LIBRE + ANNONCES QSE (sans Telegram)
+   - Tous les agents inscrits lisent et écrivent
+   - Le QSE publie des annonces et peut masquer un message
+   - Pastille « non lus » sur l'onglet Canal et sur l'icône de l'app
 ═══════════════════════════════════════════════════════ */
 
-/* ── Config Telegram ────────────────────────────────── */
-// Lien vers ton canal/groupe Telegram (à configurer)
-const TELEGRAM_CHANNEL_LINK = 'https://t.me/+LIEN_DE_TON_CANAL';  // ← À remplacer
+let CANAL_ITEMS     = [];
+let canalCharge     = false;
+let canalEnvoi      = false;
+let canalTick       = 0;
+const CANAL_VU_KEY  = 'safezone_canal_vu';
 
-/* ── Ouvrir Telegram ────────────────────────────────── */
-function openTelegram() {
-  window.open(TELEGRAM_CHANNEL_LINK, '_blank');
+function canalActif() {
+  const s = document.getElementById('screen-canal');
+  return !!(s && s.classList.contains('active'));
 }
 
-/* ── Charger les messages canal ─────────────────────── */
-async function loadCanalMessages() {
+/* Appelé à l'ouverture de l'onglet Canal */
+function ouvrirCanal() {
+  renderCanal();
+  chargerCanal(false);
+  marquerCanalLu();
+}
+// Compatibilité avec l'ancien nom
+function loadCanalMessages() { return ouvrirCanal(); }
+
+async function chargerCanal(silencieux) {
+  if (!PROFILE.pseudo && !qseAuthenticated) { canalCharge = true; if (canalActif()) renderCanal(); return; }
+  const rep = await apiJoueur('getCanal', qseAuthenticated ? { token: QSE_TOKEN } : {});
+  if (!rep.ok) {
+    if (!silencieux && canalActif()) {
+      const listEl = document.getElementById('canal-messages-list');
+      if (listEl && !CANAL_ITEMS.length) listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📴</div><div class="empty-title">' + esc(messageErreur(rep.error)) + '</div></div>';
+    }
+    return;
+  }
+  const avant = CANAL_ITEMS.length ? CANAL_ITEMS[CANAL_ITEMS.length - 1].id : '';
+  CANAL_ITEMS = (rep.data && rep.data.items) || [];
+  canalCharge = true;
+  const apres = CANAL_ITEMS.length ? CANAL_ITEMS[CANAL_ITEMS.length - 1].id : '';
+  if (canalActif()) {
+    if (!silencieux || avant !== apres) renderCanal();
+    marquerCanalLu();
+  } else {
+    majBadgeCanal();
+  }
+}
+
+function formatDateCanal(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const heure = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === new Date().toDateString()) return heure;
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) + ' ' + heure;
+}
+
+function texteCanal(t) { return esc(t).replace(/\n/g, '<br>'); }
+
+function renderCanal() {
   const listEl = document.getElementById('canal-messages-list');
+  const barre  = document.getElementById('canal-input-bar');
+  const champ  = document.getElementById('canal-input');
   if (!listEl) return;
 
-  listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Chargement…</div></div>';
+  const peutEcrire = !!PROFILE.pseudo || qseAuthenticated;
+  if (barre) barre.style.display = peutEcrire ? 'flex' : 'none';
+  if (champ) champ.placeholder = qseAuthenticated ? 'Écrire en tant que Service QSE…' : 'Écrire un message…';
 
-  const data = await apiGet({ action: 'getCanalMessages' });
-
-  if (!data || data.length === 0) {
-    listEl.innerHTML = renderCanalDefaut();
+  if (!peutEcrire) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🦸</div>'
+      + '<div class="empty-title">Crée ton avatar pour rejoindre la discussion</div>'
+      + '<button class="canal-join-btn" onclick="openAvatarCreator()">Créer mon avatar</button></div>';
+    return;
+  }
+  if (!canalCharge) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Chargement…</div></div>';
+    return;
+  }
+  if (!CANAL_ITEMS.length) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><div class="empty-title">Aucun message pour l\'instant</div><div class="empty-text">Lance la discussion : une remarque terrain, une question, une bonne pratique…</div></div>';
     return;
   }
 
-  listEl.innerHTML = data.map(function(msg) {
-    return renderCanalMessage(msg);
+  const icons = { alerte:'🚨', info:'ℹ️', formation:'📚', bravo:'🎉' };
+  listEl.innerHTML = CANAL_ITEMS.map(function(m) {
+    const modBtn = qseAuthenticated
+      ? '<button class="chat-mod-btn" data-id="' + esc(m.id) + '" data-masque="' + (m.masque ? '0' : '1') + '">' + (m.masque ? '👁 Réafficher' : '🚫 Masquer') + '</button>'
+      : '';
+    const masque = m.masque ? ' est-masque' : '';
+    if (m.genre === 'annonce') {
+      const type = icons.hasOwnProperty(m.type) ? m.type : 'info';
+      return '<div class="canal-msg-card type-' + type + masque + '">'
+        + '<div class="canal-msg-header">'
+        +   '<span class="canal-msg-type">' + icons[type] + ' ' + type.toUpperCase() + '</span>'
+        +   '<span class="canal-msg-date">' + esc(formatDateCanal(m.date)) + '</span>'
+        + '</div>'
+        + '<div class="canal-msg-title">' + esc(m.titre) + '</div>'
+        + '<div class="canal-msg-body">' + texteCanal(m.texte) + '</div>'
+        + '<div class="canal-msg-author">— Service QSE PIZZORNO</div>'
+        + (m.masque ? '<div class="chat-masque-note">Masqué pour les agents</div>' : '')
+        + modBtn
+        + '</div>';
+    }
+    const classes = 'chat-msg' + (m.moi ? ' moi' : '') + (m.qseAuteur ? ' qse' : '') + masque;
+    return '<div class="' + classes + '">'
+      + '<div class="chat-meta">' + (m.qseAuteur ? '🛡️ ' : '') + esc(m.moi && !m.qseAuteur ? 'Moi' : m.auteur) + ' · ' + esc(formatDateCanal(m.date)) + '</div>'
+      + '<div class="chat-bulle">' + texteCanal(m.texte) + '</div>'
+      + (m.masque ? '<div class="chat-masque-note">Masqué pour les agents</div>' : '')
+      + modBtn
+      + '</div>';
   }).join('');
 
-  // Bouton compose visible si QSE authentifié
-  const btn = document.getElementById('canal-compose-btn');
-  if (btn && qseAuthenticated) btn.classList.add('visible');
-}
-
-/* ── Rendu message ──────────────────────────────────── */
-function renderCanalMessage(msg) {
-  const icons = { alerte:'🚨', info:'ℹ️', formation:'📚', bravo:'🎉' };
-  const type  = icons.hasOwnProperty(msg.type) ? msg.type : 'info';
-  const icon  = icons[type];
-  const date  = new Date(msg.date || msg.dateCreation).toLocaleDateString('fr-FR', {
-    day:'2-digit', month:'short', year:'numeric'
+  listEl.querySelectorAll('.chat-mod-btn').forEach(function(b) {
+    b.addEventListener('click', function() { moderierMessage(b.dataset.id, b.dataset.masque === '1', b); });
   });
-  return '<div class="canal-msg-card type-' + type + '">'
-    + '<div class="canal-msg-header">'
-    +   '<span class="canal-msg-type">' + icon + ' ' + type.toUpperCase() + '</span>'
-    +   '<span class="canal-msg-date">' + esc(date) + '</span>'
-    + '</div>'
-    + '<div class="canal-msg-title">' + esc(msg.titre || msg.title || '') + '</div>'
-    + '<div class="canal-msg-body">' + esc(msg.message || msg.body || '') + '</div>'
-    + '<div class="canal-msg-author">— Service QSE PIZZORNO</div>'
-    + '</div>';
+
+  const zone = document.getElementById('screens');
+  if (zone) zone.scrollTop = zone.scrollHeight;
 }
 
-/* ── Messages de démo si Sheets vide ────────────────── */
-function renderCanalDefaut() {
-  const msgs = [
-    {
-      type: 'alerte',
-      titre: 'Rappel : Port des EPI obligatoire',
-      message: 'Suite à plusieurs observations terrain, nous rappelons que le port des EPI (gants, gilet HV, chaussures de sécurité) est obligatoire en toute circonstance lors des tournées de collecte.',
-      date: new Date(Date.now() - 86400000 * 2).toISOString(),
-    },
-    {
-      type: 'bravo',
-      titre: '🏆 Félicitations à l\'équipe collecte !',
-      message: 'Zéro accident enregistré ce mois-ci sur le secteur Nord. Bravo à toute l\'équipe pour leur vigilance et leur respect des consignes de sécurité. Continuez ainsi !',
-      date: new Date(Date.now() - 86400000 * 5).toISOString(),
-    },
-    {
-      type: 'formation',
-      titre: 'Formation Gestes & Postures — Inscription',
-      message: 'Une session de formation Gestes & Postures est organisée le mois prochain. Les inscriptions sont ouvertes. Contactez votre responsable d\'équipe pour vous inscrire.',
-      date: new Date(Date.now() - 86400000 * 10).toISOString(),
-    },
-    {
-      type: 'info',
-      titre: 'Nouveau : Application SafeZone RPG',
-      message: 'Bienvenue sur SafeZone RPG ! Cette application vous permet de renforcer votre culture sécurité tout en gagnant des points et des récompenses. Créez votre avatar et commencez dès aujourd\'hui !',
-      date: new Date(Date.now() - 86400000 * 15).toISOString(),
-    },
-  ];
-  return msgs.map(function(m) { return renderCanalMessage(m); }).join('');
+async function envoyerMessageCanal() {
+  const champ = document.getElementById('canal-input');
+  const btn   = document.getElementById('canal-send-btn');
+  const texte = (champ.value || '').trim();
+  if (!texte || canalEnvoi) return;
+  canalEnvoi = true; btn.disabled = true;
+
+  const rep = await apiJoueur('postMessage', Object.assign({ texte: texte }, qseAuthenticated ? { token: QSE_TOKEN } : {}));
+
+  canalEnvoi = false; btn.disabled = false;
+  if (!rep.ok) { showToast(messageErreur(rep.error)); return; }
+  champ.value = '';
+  ajusterChampCanal();
+  CANAL_ITEMS.push(rep.data);
+  canalCharge = true;
+  renderCanal();
+  marquerCanalLu();
 }
+
+async function moderierMessage(id, masquer, btn) {
+  if (!qseAuthenticated) return;
+  btn.disabled = true;
+  const rep = await apiQSE('masquerMessage', { msgId: id, masque: masquer });
+  btn.disabled = false;
+  if (!rep.ok) { showToast(messageErreur(rep.error)); return; }
+  const m = CANAL_ITEMS.find(function(x){ return x.id === id; });
+  if (m) m.masque = masquer;
+  renderCanal();
+  showToast(masquer ? '🚫 Message masqué pour les agents' : '👁 Message réaffiché');
+}
+
+/* ── Non lus ────────────────────────────────────────── */
+function lireVuCanal() { try { return localStorage.getItem(CANAL_VU_KEY); } catch(e) { return null; } }
+function ecrireVuCanal(v) { try { localStorage.setItem(CANAL_VU_KEY, v); } catch(e) {} }
+
+function marquerCanalLu() {
+  if (CANAL_ITEMS.length) ecrireVuCanal(CANAL_ITEMS[CANAL_ITEMS.length - 1].date);
+  majBadgeCanal();
+}
+
+function majBadgeCanal() {
+  let vu = lireVuCanal();
+  if (vu === null && CANAL_ITEMS.length) {          // première utilisation : pas d'historique en « non lu »
+    vu = CANAL_ITEMS[CANAL_ITEMS.length - 1].date;
+    ecrireVuCanal(vu);
+  }
+  const n = canalActif() ? 0 : CANAL_ITEMS.filter(function(m){ return !m.moi && m.date > (vu || ''); }).length;
+  const badge = document.getElementById('canal-badge');
+  if (badge) {
+    badge.textContent = n > 9 ? '9+' : String(n);
+    badge.style.display = n > 0 ? 'flex' : 'none';
+  }
+  try {
+    if (n > 0 && navigator.setAppBadge) navigator.setAppBadge(n).catch(function(){});
+    else if (navigator.clearAppBadge) navigator.clearAppBadge().catch(function(){});
+  } catch(e) {}
+}
+
+/* ── Zone de saisie ─────────────────────────────────── */
+function ajusterChampCanal() {
+  const c = document.getElementById('canal-input');
+  if (!c) return;
+  c.style.height = 'auto';
+  c.style.height = Math.min(c.scrollHeight, 110) + 'px';
+}
+
+/* ── Rafraîchissement : toutes les 30 s sur l'onglet Canal, 90 s ailleurs ── */
+function demarrerSuiviCanal() {
+  const champ = document.getElementById('canal-input');
+  if (champ) {
+    champ.addEventListener('input', ajusterChampCanal);
+    champ.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); envoyerMessageCanal(); }
+    });
+  }
+  setInterval(function() {
+    canalTick++;
+    if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+    if (canalActif() || canalTick % 3 === 0) chargerCanal(true);
+  }, 30000);
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') chargerCanal(true);
+  });
+  setTimeout(function(){ chargerCanal(true); }, 2500);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrerSuiviCanal);
+else demarrerSuiviCanal();
 
 /* ── Compose message QSE ────────────────────────────── */
 let canalMsgType = 'info';
@@ -1933,13 +2064,13 @@ async function publishCanalMessage() {
   });
   const result = rep.ok ? rep.data : null;
 
-  btn.disabled = false; btn.textContent = '📣 Publier + Notifier Telegram';
+  btn.disabled = false; btn.textContent = '📣 Publier l\'annonce';
 
   if (result) {
     closeCanalCompose();
-    showToast('✅ Message publié' + (result.telegramSent ? ' + Telegram notifié !' : ' !'));
-    loadCanalMessages();
+    showToast('✅ Annonce publiée');
+    chargerCanal(false);
   } else {
-    showToast('⚠️ Erreur lors de la publication');
+    showToast(messageErreur(rep.error));
   }
 }
