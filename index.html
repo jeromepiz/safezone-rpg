@@ -2,6 +2,9 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
+  <!-- S-SEC : politique de sécurité du contenu (limite ce qu'un script injecté pourrait faire) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
+  <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#0b1219" />
   <meta name="description" content="SafeZone RPG — Sécurité au travail gamifiée · PIZZORNO" />
@@ -1825,8 +1828,8 @@
     <div class="qse-pin-wrap">
       <div class="qse-pin-icon">🔐</div>
       <div class="qse-pin-title">Accès Réservé QSE</div>
-      <div class="qse-pin-sub">Entre le code PIN administrateur</div>
-      <div class="qse-pin-display" id="qse-pin-display">_ _ _ _</div>
+      <div class="qse-pin-sub">Entre le code administrateur (6 à 12 chiffres)</div>
+      <div class="qse-pin-display" id="qse-pin-display">_ _ _ _ _ _</div>
       <div class="qse-pin-error hidden" id="qse-pin-error">❌ Code incorrect</div>
       <div class="qse-pin-grid">
         <button class="qse-pin-btn" onclick="pinPress('1')">1</button>

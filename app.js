@@ -5,6 +5,34 @@
 /* ── API S-03 ───────────────────────────────────────── */
 const API_URL = "https://script.google.com/macros/s/AKfycbx71CS0GXaFT2pLVm4aXS_OxC8mrcWvMI7be9r-KycELxy2qzYyOWMWgWyVANUywhsj/exec";
 
+/* ── Sécurité : échappement HTML de toute donnée venant du serveur ── */
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"'`]/g, function(c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;', '`':'&#96;' }[c];
+  });
+}
+function randomHex(nbOctets) {
+  const a = new Uint8Array(nbOctets);
+  crypto.getRandomValues(a);
+  return Array.from(a, function(b){ return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+/* Messages d'erreur serveur → texte compréhensible */
+const API_ERREURS = {
+  non_autorise:          '🔒 Accès refusé',
+  trop_de_requetes:      '⏳ Trop de requêtes, patiente une minute',
+  trop_rapide:           '⏳ Attends 30 secondes entre deux signalements',
+  quete_non_terminee:    '⚔️ Quête pas encore validée par le serveur',
+  quete_deja_reclamee:   '✅ Récompense déjà réclamée',
+  pin_incorrect:         '❌ Code incorrect',
+  trop_de_tentatives:    '⛔ Trop d\'essais : accès bloqué 15 minutes',
+  description_trop_courte:'✏️ Description trop courte',
+  pseudo_invalide:       '✏️ Pseudo invalide (2 à 24 caractères)',
+  profil_inexistant:     '👤 Crée d\'abord ton avatar',
+};
+function messageErreur(code) { return API_ERREURS[code] || '⚠️ Erreur réseau'; }
+
+/* GET : uniquement pour les données publiques (quiz, canal) */
 async function apiGet(params) {
   try {
     const qs = new URLSearchParams(params).toString();
@@ -13,12 +41,36 @@ async function apiGet(params) {
     return j.ok ? j.data : null;
   } catch(e) { return null; }
 }
-async function apiPost(body) {
+/* POST générique : renvoie { ok, data, error } */
+async function apiCall(body) {
   try {
     const res = await fetch(API_URL, { method:'POST', body:JSON.stringify(body) });
     const j = await res.json();
-    return j.ok ? j.data : null;
-  } catch(e) { return null; }
+    return j && j.ok ? { ok:true, data:j.data } : { ok:false, error:(j && j.error) || 'erreur' };
+  } catch(e) { return { ok:false, error:'reseau' }; }
+}
+async function apiPost(body) {
+  const r = await apiCall(body);
+  return r.ok ? r.data : null;
+}
+/* Appel joueur : ajoute automatiquement l'identifiant et le secret du téléphone */
+function apiJoueur(action, extra) {
+  return apiCall(Object.assign({ action: action, userId: PROFILE.userId, secret: PROFILE.secret }, extra || {}));
+}
+/* Appel QSE : ajoute le jeton de session obtenu après saisie du PIN */
+async function apiQSE(action, extra) {
+  const r = await apiCall(Object.assign({ action: action, token: QSE_TOKEN }, extra || {}));
+  if (!r.ok && r.error === 'non_autorise') qseDeconnecter(true);
+  return r;
+}
+/* Applique le total d'XP renvoyé par le serveur (seule source de vérité) */
+function appliquerXPServeur(data) {
+  if (!data || typeof data.xp !== 'number') return;
+  const niveauAvant = PROFILE.niveau;
+  PROFILE.xp     = data.xp;
+  PROFILE.niveau = calcNiveau(data.xp);
+  saveProfile(PROFILE);
+  if (PROFILE.niveau > niveauAvant && typeof showLevelUp === 'function') showLevelUp(PROFILE.niveau);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -38,22 +90,22 @@ async function syncToSheets(silent = true) {
   syncInProgress = true;
   setSyncIndicator('syncing');
   try {
-    const data = await apiPost({
-      action: 'upsertJoueur',
+    // L'XP et le niveau ne sont plus envoyés : le serveur les calcule lui-même
+    const rep = await apiJoueur('upsertJoueur', {
       joueur: {
-        userId:          PROFILE.userId,
-        pseudo:          PROFILE.pseudo,
-        avatar:          PROFILE.avatarId || 'recrue',
-        xp:              PROFILE.xp,
-        niveau:          PROFILE.niveau,
-        badges:          PROFILE.badges,
-        quetes:          PROFILE.quetes,
-        color:           PROFILE.color,
-        classe:          PROFILE.classe,
-        dateInscription: PROFILE.dateInscription,
+        pseudo:  PROFILE.pseudo,
+        avatar:  PROFILE.avatarId || 'recrue',
+        badges:  PROFILE.badges,
+        quetes:  PROFILE.quetes,
+        color:   PROFILE.color,
+        classe:  PROFILE.classe,
       }
     });
+    const data = rep.ok ? rep.data : null;
+    if (!rep.ok && rep.error !== 'reseau' && !silent) showToast(messageErreur(rep.error));
     if (data) {
+      appliquerXPServeur(data);
+      if (typeof refreshUI === 'function') refreshUI();
       PROFILE.lastSync = new Date().toISOString();
       saveProfile(PROFILE);
       setSyncIndicator('ok');
@@ -72,16 +124,25 @@ async function syncToSheets(silent = true) {
 async function loadFromSheets() {
   if (!PROFILE.userId) return;
   setSyncIndicator('syncing');
-  const data = await apiGet({ action: 'getJoueur', userId: PROFILE.userId });
+  const rep  = await apiJoueur('getJoueur');
+  const data = rep.ok ? rep.data : null;
+  if (rep.ok && !data && PROFILE.pseudo) {
+    // Profil pas encore connu du serveur : on le crée
+    setSyncIndicator('ok');
+    syncToSheets();
+    return;
+  }
   if (data) {
-    // Fusion : on garde le max XP (évite de perdre des points gagnés hors ligne)
-    const xpFinal    = Math.max(PROFILE.xp, data.xp || 0);
+    // L'XP du serveur fait foi (elle ne peut plus être modifiée depuis le téléphone)
+    const xpFinal     = Number(data.xp) || 0;
     const niveauFinal = calcNiveau(xpFinal);
+    const avatarOk    = avatarParId(data.avatar);
     PROFILE = {
       ...PROFILE,
       pseudo:  data.pseudo  || PROFILE.pseudo,
-      avatar:  data.avatar  ? ('avatars/' + data.avatar + '.png') : PROFILE.avatar,
-      avatarId: data.avatar || PROFILE.avatarId,
+      avatar:  avatarOk ? avatarOk.img : PROFILE.avatar,
+      avatarId: avatarOk ? avatarOk.id : PROFILE.avatarId,
+      color:   couleurValide(data.color) ? data.color : PROFILE.color,
       xp:      xpFinal,
       niveau:  niveauFinal,
       badges:  data.badges  || PROFILE.badges,
@@ -104,8 +165,7 @@ async function gainXP(montant, raison) {
   PROFILE.niveau     = calcNiveau(PROFILE.xp);
   saveProfile(PROFILE);
   refreshUI();
-  // XP sur Sheets (non bloquant)
-  apiPost({ action:'addXP', userId:PROFILE.userId, xp:montant, raison:raison }).catch(()=>{});
+  // (S-SEC) L'XP n'est plus envoyée au serveur : il la calcule lui-même
   // Level up ?
   if (PROFILE.niveau > niveauAvant) {
     showLevelUp(PROFILE.niveau);
@@ -249,7 +309,8 @@ function showBadgePopup(badge) {
 
 /* ── PROFIL LOCAL ───────────────────────────────────── */
 const DEFAULT_PROFILE = {
-  userId:   'local_' + Math.random().toString(36).slice(2,10),
+  userId:   'local_' + randomHex(8),
+  secret:   randomHex(32),
   pseudo:   '', avatar: 'avatars/recrue.png', avatarId: 'recrue',
   color:    '#00d4ff', classe: 'recrue',
   xp: 0, niveau: 1, badges: [], quetes: [],
@@ -262,6 +323,8 @@ function loadProfile() {
 }
 function saveProfile(p) { try{localStorage.setItem('safezone_profile',JSON.stringify(p));}catch(e){} }
 let PROFILE = loadProfile();
+if (!/^[a-f0-9]{64}$/.test(PROFILE.secret || '')) PROFILE.secret = randomHex(32);
+saveProfile(PROFILE);
 
 /* ── DONNÉES AVATAR ─────────────────────────────────── */
 const AVATARS = [
@@ -289,6 +352,13 @@ const CLASSES = [
   {id:'expert',    icon:'🎯', label:'Expert QSE',        desc:'Tu es une référence pour ton équipe',     req:'Niveau 6 requis (1000 XP)',  unlock:1000},
   {id:'champion',  icon:'🏆', label:'Champion SafeZone', desc:'Le titre ultime. Légende de l\'agence.',  req:'Niveau 10 requis (6000 XP)', unlock:6000},
 ];
+
+function avatarParId(id) { return AVATARS.find(function(a){ return a.id === id; }) || null; }
+function couleurValide(c) { return COLORS.some(function(x){ return x.value === c; }); }
+function avatarSrc(p) {
+  const a = avatarParId(p.avatarId) || AVATARS.find(function(x){ return x.img === p.avatar; }) || AVATARS[0];
+  return a.img;
+}
 
 /* ── AVATAR CREATOR STATE ───────────────────────────── */
 let tempAvatar = {};
@@ -436,8 +506,8 @@ function refreshUI() {
   const xpMax = xpForNextLevel(p.niveau);
   const xpPct = Math.min(100, Math.round((p.xp / xpMax) * 100));
   const cl = CLASSES.find(function(c){ return c.id===p.classe; }) || CLASSES[0];
-  const img   = '<img src="'+(p.avatar||'avatars/recrue.png')+'" style="width:100%;height:100%;object-fit:contain;object-position:bottom;" />';
-  const img88 = '<img src="'+(p.avatar||'avatars/recrue.png')+'" style="width:88%;height:88%;object-fit:contain;object-position:bottom;" />';
+  const img   = '<img src="'+esc(avatarSrc(p))+'" style="width:100%;height:100%;object-fit:contain;object-position:bottom;" />';
+  const img88 = '<img src="'+esc(avatarSrc(p))+'" style="width:88%;height:88%;object-fit:contain;object-position:bottom;" />';
 
   document.getElementById('topbar-avatar').innerHTML  = img;
   document.getElementById('topbar-name').textContent  = p.pseudo || 'Mon Héros';
@@ -469,7 +539,7 @@ function refreshUI() {
   }
 
   const ring = document.querySelector('.profile-avatar-ring');
-  if (ring) ring.style.background = 'conic-gradient('+(p.color||'#00d4ff')+' '+xpPct+'%, #1c2d3e '+xpPct+'%)';
+  if (ring) ring.style.background = 'conic-gradient('+(couleurValide(p.color)?p.color:'#00d4ff')+' '+xpPct+'%, #1c2d3e '+xpPct+'%)';
 
   document.getElementById('rank-my-avatar').innerHTML  = img;
   document.getElementById('rank-my-name').textContent  = (p.pseudo||'Mon Héros')+' (Moi)';
@@ -735,7 +805,8 @@ function renderQuestion() {
     if (!q.choix[l]) return;
     const btn = document.createElement('button');
     btn.className = 'quiz-choice-btn';
-    btn.innerHTML = '<span class="quiz-choice-letter">'+l+'</span><span class="quiz-choice-text">'+q.choix[l]+'</span>';
+    btn.innerHTML = '<span class="quiz-choice-letter">'+l+'</span><span class="quiz-choice-text"></span>';
+    btn.querySelector('.quiz-choice-text').textContent = q.choix[l];
     btn.onclick = function() { answerQuestion(l, q.questionId, btn); };
     choicesEl.appendChild(btn);
   });
@@ -755,10 +826,11 @@ async function answerQuestion(reponse, questionId, btnClicked) {
   document.querySelectorAll('.quiz-choice-btn').forEach(function(b) { b.disabled = true; });
 
   // Envoyer au serveur
-  const result = await apiPost({ action: 'submitQuizAnswer', userId: PROFILE.userId, questionId, reponse });
+  const rep = await apiJoueur('submitQuizAnswer', { questionId, reponse });
+  const result = rep.ok ? rep.data : null;
 
   if (!result) {
-    showToast('⚠️ Erreur réseau, réessaie');
+    showToast(rep.error === 'profil_inexistant' ? messageErreur(rep.error) : '⚠️ Erreur réseau, réessaie');
     quizState.answered = false;
     document.querySelectorAll('.quiz-choice-btn').forEach(function(b) { b.disabled = false; });
     return;
@@ -802,13 +874,8 @@ async function answerQuestion(reponse, questionId, btnClicked) {
   saveStats(stats);
 
   // Gain XP profil si correct
-  if (correct && xpGagne > 0) {
-    PROFILE.xp    += xpGagne;
-    PROFILE.niveau = calcNiveau(PROFILE.xp);
-    saveProfile(PROFILE);
-    // Synchro silencieuse
-    apiPost({ action:'addXP', userId:PROFILE.userId, xp:xpGagne, raison:'Quiz: '+questionId }).catch(function(){});
-  }
+  // XP : total calculé par le serveur
+  appliquerXPServeur(result);
 
   // Mise à jour topbar XP
   refreshUI();
@@ -1080,23 +1147,36 @@ function checkQuetes() {
 }
 
 /* ── Réclamer la récompense d'une quête ─────────────── */
-function claimQuete(questId) {
+let claimEnCours = false;
+async function claimQuete(questId) {
   const qState = getQuestesState();
   const quete  = QUETES_CATALOGUE.find(function(q) { return q.id === questId; });
-  if (!quete || !qState[questId] || qState[questId].claimed) return;
+  if (!quete || !qState[questId] || qState[questId].claimed || claimEnCours) return;
 
-  qState[questId].claimed    = true;
+  claimEnCours = true;
+  const rep = await apiJoueur('claimQuete', { queteId: questId });
+  claimEnCours = false;
+
+  if (!rep.ok) {
+    if (rep.error === 'quete_deja_reclamee') {
+      qState[questId].claimed = true;
+      saveQuestesState(qState);
+      renderQuetes();
+    }
+    showToast(messageErreur(rep.error));
+    return;
+  }
+
+  qState[questId].claimed     = true;
   qState[questId].dateClaimed = new Date().toISOString();
   saveQuestesState(qState);
 
-  // Gain XP
-  PROFILE.xp    += quete.xpReward;
-  PROFILE.niveau = calcNiveau(PROFILE.xp);
-  saveProfile(PROFILE);
+  // Gain XP validé par le serveur
+  appliquerXPServeur(rep.data);
   refreshUI();
   syncToSheets();
 
-  showXpPopup(quete.xpReward, quete.name);
+  showXpPopup(rep.data.xpGagne, quete.name);
   renderQuetes();
 }
 
@@ -1378,6 +1458,7 @@ async function submitSignalement() {
   const signalement = {
     userId:       PROFILE.userId,
     pseudo:       PROFILE.pseudo,
+    cle:          signalState.categorie,
     categorie:    cfg.label,
     description:  desc,
     localisation: loc,
@@ -1385,17 +1466,16 @@ async function submitSignalement() {
     priorite:     signalState.priorite,
   };
 
-  const result = await apiPost({ action: 'createSignalement', signalement });
+  const rep = await apiJoueur('createSignalement', { signalement });
+  const result = rep.ok ? rep.data : null;
 
   btn.disabled = false;
   btn.textContent = '🚀 Envoyer le Signalement';
 
   if (result) {
     // XP gagné
-    const xpGagne = cfg.xp;
-    PROFILE.xp    += xpGagne;
-    PROFILE.niveau = calcNiveau(PROFILE.xp);
-    saveProfile(PROFILE);
+    const xpGagne = Number(result.xpGagne) || 0;
+    appliquerXPServeur(result);
 
     // Stats
     const stats = getStats();
@@ -1424,7 +1504,7 @@ async function submitSignalement() {
     document.getElementById('signal-confirm-xp').textContent = '+' + xpGagne + ' XP';
     showSignalView('confirm');
   } else {
-    showToast('⚠️ Erreur réseau. Vérifie ta connexion et réessaie.');
+    showToast(rep.error === 'reseau' ? '⚠️ Erreur réseau. Vérifie ta connexion et réessaie.' : messageErreur(rep.error));
   }
 }
 
@@ -1460,14 +1540,16 @@ function renderRecentSignalements() {
 
   el.innerHTML = list.slice(0, 5).map(function(s) {
     const date = new Date(s.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
-    const statusClass = 'status-' + (s.statut || 'nouveau');
+    const statut = ['nouveau','en-cours','résolu','rejeté'].indexOf(s.statut) >= 0 ? s.statut : 'nouveau';
+    const statusClass = 'status-' + statut;
+    const descr = String(s.description || '');
     return '<div class="signal-recent-item">'
       + '<div class="signal-recent-icon">⚠️</div>'
       + '<div class="signal-recent-body">'
-      +   '<div class="signal-recent-desc">' + s.description.slice(0, 60) + (s.description.length > 60 ? '…' : '') + '</div>'
-      +   '<div class="signal-recent-meta">' + date + ' · +' + s.xpGagne + ' XP</div>'
+      +   '<div class="signal-recent-desc">' + esc(descr.slice(0, 60)) + (descr.length > 60 ? '…' : '') + '</div>'
+      +   '<div class="signal-recent-meta">' + esc(date) + ' · +' + (Number(s.xpGagne) || 0) + ' XP</div>'
       + '</div>'
-      + '<span class="signal-recent-status ' + statusClass + '">' + (s.statut || 'nouveau') + '</span>'
+      + '<span class="signal-recent-status ' + statusClass + '">' + esc(statut) + '</span>'
       + '</div>';
   }).join('');
 }
@@ -1481,8 +1563,13 @@ const _origNavigateRef = window.navigate || function(){};
    Fonctions : liste signalements, changement statut, XP bonus
 ═══════════════════════════════════════════════════════ */
 
-/* ── Config PIN (à changer avant le lancement !) ────── */
-const QSE_PIN = '1234';  // ← Change ce code avant le lancement !
+/* ── Accès QSE (S-SEC) ──────────────────────────────────
+   Le PIN n'est plus dans le code : il est vérifié par le serveur
+   (propriété QSE_PIN d'Apps Script), qui renvoie un jeton de session
+   valable 6 h, gardé seulement le temps que l'app reste ouverte. */
+let QSE_TOKEN = '';
+try { QSE_TOKEN = sessionStorage.getItem('safezone_qse_token') || ''; } catch(e) {}
+const QSE_PIN_MAX = 12;
 
 /* ── Triple tap détection ───────────────────────────── */
 let qseTapCount = 0;
@@ -1500,7 +1587,16 @@ function handleQSETap() {
 
 /* ── Ouverture QSE ──────────────────────────────────── */
 let qsePinValue = '';
-let qseAuthenticated = false;
+let qseAuthenticated = !!QSE_TOKEN;
+
+function qseDeconnecter(expire) {
+  QSE_TOKEN = '';
+  qseAuthenticated = false;
+  try { sessionStorage.removeItem('safezone_qse_token'); } catch(e) {}
+  const btn = document.getElementById('canal-compose-btn');
+  if (btn) btn.classList.remove('visible');
+  if (expire) showToast('🔒 Session QSE expirée, ressaisis le code');
+}
 let qseCurrentFilter = '';
 let qseSignalementsCache = [];
 let qseCurrentSigId = null;
@@ -1532,27 +1628,35 @@ function pinPress(key) {
   if (key === '←') {
     qsePinValue = qsePinValue.slice(0, -1);
   } else if (key === 'OK') {
-    if (qsePinValue === QSE_PIN) {
-      qseAuthenticated = true;
-      document.getElementById('qse-pin-gate').style.display  = 'none';
-      document.getElementById('qse-dashboard').style.display = 'flex';
-      loadQSESignalements();
-    } else {
-      document.getElementById('qse-pin-error').classList.remove('hidden');
-      qsePinValue = '';
-      setTimeout(function(){
-        document.getElementById('qse-pin-error').classList.add('hidden');
-      }, 2000);
-    }
-  } else if (qsePinValue.length < 4) {
+    verifierPinQSE(qsePinValue);
+    qsePinValue = '';
+  } else if (qsePinValue.length < QSE_PIN_MAX) {
     qsePinValue += key;
   }
   updatePinDisplay();
 }
 
+async function verifierPinQSE(pin) {
+  const errEl = document.getElementById('qse-pin-error');
+  if (!pin) return;
+  const rep = await apiCall({ action: 'qseLogin', pin: pin });
+  if (rep.ok && rep.data && rep.data.token) {
+    QSE_TOKEN = rep.data.token;
+    qseAuthenticated = true;
+    try { sessionStorage.setItem('safezone_qse_token', QSE_TOKEN); } catch(e) {}
+    document.getElementById('qse-pin-gate').style.display  = 'none';
+    document.getElementById('qse-dashboard').style.display = 'flex';
+    loadQSESignalements();
+  } else {
+    errEl.textContent = messageErreur(rep.error);
+    errEl.classList.remove('hidden');
+    setTimeout(function(){ errEl.classList.add('hidden'); }, 2500);
+  }
+}
+
 function updatePinDisplay() {
   const dots = qsePinValue.split('').map(function(){ return '●'; });
-  while (dots.length < 4) dots.push('_');
+  while (dots.length < 6) dots.push('_');
   document.getElementById('qse-pin-display').textContent = dots.join(' ');
 }
 
@@ -1561,7 +1665,9 @@ async function loadQSESignalements() {
   const listEl = document.getElementById('qse-signalements-list');
   listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Chargement…</div></div>';
 
-  const data = await apiGet({ action: 'getSignalements' });
+  const rep  = await apiQSE('getSignalements');
+  if (!rep.ok && rep.error === 'non_autorise') { closeQSE(); return; }
+  const data = rep.ok ? rep.data : null;
 
   if (!data || data.length === 0) {
     listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Aucun signalement</div></div>';
@@ -1598,7 +1704,7 @@ function renderQSEList(data, filter) {
   const filtered = filter ? data.filter(function(s){ return s.statut === filter; }) : data;
 
   if (filtered.length === 0) {
-    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Aucun signalement ' + (filter || '') + '</div></div>';
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Aucun signalement ' + esc(filter || '') + '</div></div>';
     return;
   }
 
@@ -1616,19 +1722,25 @@ function renderQSEList(data, filter) {
 
   listEl.innerHTML = filtered.map(function(s) {
     const date = new Date(s.dateCreation).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
-    return '<div class="qse-signal-card" onclick="openQSEDetail(\'' + s.sigId + '\')">'
+    const descr = String(s.description || '');
+    return '<div class="qse-signal-card" data-sigid="' + esc(s.sigId) + '">'
       + '<div class="qse-signal-top">'
-      +   '<div class="qse-signal-cat">' + s.categorie + '</div>'
+      +   '<div class="qse-signal-cat">' + esc(s.categorie) + '</div>'
       +   (statusBadge[s.statut] || '')
       + '</div>'
-      + '<div class="qse-signal-meta">' + date + ' · ' + (s.localisation || 'Localisation non renseignée') + '</div>'
-      + '<div class="qse-signal-desc">' + s.description.slice(0, 100) + (s.description.length > 100 ? '…' : '') + '</div>'
+      + '<div class="qse-signal-meta">' + esc(date) + ' · ' + esc(s.localisation || 'Localisation non renseignée') + '</div>'
+      + '<div class="qse-signal-desc">' + esc(descr.slice(0, 100)) + (descr.length > 100 ? '…' : '') + '</div>'
       + '<div class="qse-signal-footer">'
-      +   '<div class="qse-signal-who">👤 ' + (s.pseudo || s.userId) + '</div>'
+      +   '<div class="qse-signal-who">👤 ' + esc(s.pseudo || s.userId) + '</div>'
       +   (priorityTag[s.priorite] || '')
       + '</div>'
       + '</div>';
   }).join('');
+
+  // Clic sur une carte : l'identifiant est lu dans l'attribut, jamais injecté dans du code
+  listEl.querySelectorAll('.qse-signal-card').forEach(function(card) {
+    card.addEventListener('click', function() { openQSEDetail(card.dataset.sigid); });
+  });
 }
 
 /* ── Détail signalement ─────────────────────────────── */
@@ -1643,12 +1755,12 @@ function openQSEDetail(sigId) {
   const date = new Date(s.dateCreation).toLocaleDateString('fr-FR', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' });
 
   document.getElementById('qse-modal-body').innerHTML =
-    '<div class="qse-detail-row"><div class="qse-detail-label">📝 Description</div><div class="qse-detail-val">' + s.description + '</div></div>'
-  + '<div class="qse-detail-row"><div class="qse-detail-label">📍 Localisation</div><div class="qse-detail-val">' + (s.localisation || '—') + '</div></div>'
-  + '<div class="qse-detail-row"><div class="qse-detail-label">👤 Signalé par</div><div class="qse-detail-val">' + (s.pseudo || s.userId) + '</div></div>'
-  + '<div class="qse-detail-row"><div class="qse-detail-label">📅 Date</div><div class="qse-detail-val">' + date + '</div></div>'
-  + '<div class="qse-detail-row"><div class="qse-detail-label">🎯 Priorité</div><div class="qse-detail-val">' + (s.priorite || 'normale') + '</div></div>'
-  + (s.commentaireQSE ? '<div class="qse-detail-row"><div class="qse-detail-label">💬 Commentaire QSE précédent</div><div class="qse-detail-val">' + s.commentaireQSE + '</div></div>' : '');
+    '<div class="qse-detail-row"><div class="qse-detail-label">📝 Description</div><div class="qse-detail-val">' + esc(s.description) + '</div></div>'
+  + '<div class="qse-detail-row"><div class="qse-detail-label">📍 Localisation</div><div class="qse-detail-val">' + esc(s.localisation || '—') + '</div></div>'
+  + '<div class="qse-detail-row"><div class="qse-detail-label">👤 Signalé par</div><div class="qse-detail-val">' + esc(s.pseudo || s.userId) + '</div></div>'
+  + '<div class="qse-detail-row"><div class="qse-detail-label">📅 Date</div><div class="qse-detail-val">' + esc(date) + '</div></div>'
+  + '<div class="qse-detail-row"><div class="qse-detail-label">🎯 Priorité</div><div class="qse-detail-val">' + esc(s.priorite || 'normale') + '</div></div>'
+  + (s.commentaireQSE ? '<div class="qse-detail-row"><div class="qse-detail-label">💬 Commentaire QSE précédent</div><div class="qse-detail-val">' + esc(s.commentaireQSE) + '</div></div>' : '');
 
   document.getElementById('qse-detail-modal').classList.remove('hidden');
 }
@@ -1666,12 +1778,12 @@ async function updateStatut(statut) {
   const btn = event.target;
   btn.disabled = true; btn.textContent = '⏳';
 
-  const result = await apiPost({
-    action:      'updateSignalement',
+  const rep = await apiQSE('updateSignalement', {
     sigId:       qseCurrentSigId,
     statut,
     commentaire: comment,
   });
+  const result = rep.ok ? rep.data : null;
 
   btn.disabled = false;
   btn.textContent = statut === 'résolu' ? '✅ Résoudre' : statut === 'en-cours' ? '🔄 En cours' : '❌ Rejeter';
@@ -1732,17 +1844,18 @@ async function loadCanalMessages() {
 /* ── Rendu message ──────────────────────────────────── */
 function renderCanalMessage(msg) {
   const icons = { alerte:'🚨', info:'ℹ️', formation:'📚', bravo:'🎉' };
-  const icon  = icons[msg.type] || 'ℹ️';
+  const type  = icons.hasOwnProperty(msg.type) ? msg.type : 'info';
+  const icon  = icons[type];
   const date  = new Date(msg.date || msg.dateCreation).toLocaleDateString('fr-FR', {
     day:'2-digit', month:'short', year:'numeric'
   });
-  return '<div class="canal-msg-card type-' + (msg.type || 'info') + '">'
+  return '<div class="canal-msg-card type-' + type + '">'
     + '<div class="canal-msg-header">'
-    +   '<span class="canal-msg-type">' + icon + ' ' + (msg.type || 'info').toUpperCase() + '</span>'
-    +   '<span class="canal-msg-date">' + date + '</span>'
+    +   '<span class="canal-msg-type">' + icon + ' ' + type.toUpperCase() + '</span>'
+    +   '<span class="canal-msg-date">' + esc(date) + '</span>'
     + '</div>'
-    + '<div class="canal-msg-title">' + (msg.titre || msg.title || '') + '</div>'
-    + '<div class="canal-msg-body">' + (msg.message || msg.body || '') + '</div>'
+    + '<div class="canal-msg-title">' + esc(msg.titre || msg.title || '') + '</div>'
+    + '<div class="canal-msg-body">' + esc(msg.message || msg.body || '') + '</div>'
     + '<div class="canal-msg-author">— Service QSE PIZZORNO</div>'
     + '</div>';
 }
@@ -1811,15 +1924,14 @@ async function publishCanalMessage() {
   const btn = document.querySelector('#canal-compose-modal .signal-submit-btn');
   btn.disabled = true; btn.textContent = '⏳ Publication…';
 
-  const result = await apiPost({
-    action:  'publishCanalMessage',
+  const rep = await apiQSE('publishCanalMessage', {
     message: {
       type:    canalMsgType,
       titre,
       message: body,
-      auteur:  PROFILE.pseudo || 'QSE',
     }
   });
+  const result = rep.ok ? rep.data : null;
 
   btn.disabled = false; btn.textContent = '📣 Publier + Notifier Telegram';
 

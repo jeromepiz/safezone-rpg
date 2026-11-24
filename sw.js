@@ -3,7 +3,7 @@
    S-02 · Cache-First + Network-Fallback strategy
    ============================================================ */
 
-const CACHE_NAME    = 'safezone-rpg-v12';
+const CACHE_NAME    = 'safezone-rpg-v13';
 const OFFLINE_URL   = './index.html';
 
 /* Assets mis en cache au premier lancement */
@@ -75,6 +75,10 @@ self.addEventListener('fetch', (event) => {
   /* On ignore les requêtes non-GET et les extensions navigateur */
   if (request.method !== 'GET') return;
   if (url.protocol === 'chrome-extension:') return;
+
+  /* S-SEC : l'API Apps Script n'est jamais mise en cache (données à jour
+     et aucune donnée sensible stockée sur le téléphone) */
+  if (url.hostname === 'script.google.com' || url.hostname.endsWith('.googleusercontent.com')) return;
 
   /* Stratégie fonts Google : Cache-First avec fallback réseau */
   if (DYNAMIC_CACHE_ORIGINS.includes(url.hostname)) {
