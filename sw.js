@@ -3,7 +3,7 @@
    S-02 · Cache-First + Network-Fallback strategy
    ============================================================ */
 
-const CACHE_NAME    = 'safezone-rpg-v13';
+const CACHE_NAME    = 'safezone-rpg-v14';
 const OFFLINE_URL   = './index.html';
 
 /* Assets mis en cache au premier lancement */
@@ -35,7 +35,7 @@ self.addEventListener('install', (event) => {
            add() individuel pour résister aux icônes absentes */
         return Promise.allSettled(
           PRECACHE_ASSETS.map(url =>
-            cache.add(url).catch(err =>
+            cache.add(new Request(url, { cache: 'reload' })).catch(err =>
               console.warn('[SW] Précache ignoré:', url, err.message)
             )
           )
@@ -86,9 +86,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  /* Stratégie assets locaux : Cache-First avec mise à jour en arrière-plan */
+  /* Assets locaux :
+     - page, scripts, manifest : réseau d'abord (version à jour garantie,
+       cache en secours hors-ligne) → les correctifs arrivent dès l'ouverture
+     - images : cache d'abord avec mise à jour en arrière-plan */
   if (url.origin === self.location.origin) {
-    event.respondWith(staleWhileRevalidate(request));
+    const coeurAppli = request.mode === 'navigate' || url.pathname.endsWith('/') ||
+                       /\.(html|js|json)$/.test(url.pathname);
+    event.respondWith(coeurAppli ? networkFirstFrais(request) : staleWhileRevalidate(request));
     return;
   }
 
@@ -129,6 +134,19 @@ async function staleWhileRevalidate(request) {
     .catch(() => null);
 
   return cached || networkFetch || offlineFallback(request);
+}
+
+/** Réseau d'abord en contournant le cache HTTP du navigateur, cache en secours */
+async function networkFirstFrais(request) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const response = await fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' });
+    if (response.ok) cache.put(request, response.clone());
+    return response;
+  } catch {
+    const cached = await cache.match(request) || await cache.match(request, { ignoreSearch: true });
+    return cached || offlineFallback(request);
+  }
 }
 
 /** Network-First : réseau en priorité, cache en secours */

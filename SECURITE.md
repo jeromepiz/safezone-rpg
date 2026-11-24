@@ -50,7 +50,7 @@ Si tes colonnes portent d'autres noms, renomme les en-têtes.
 4. **Archive tous les autres déploiements** de la liste : une ancienne version reste appelable avec l'ancien code non protégé.
 
 ### 5. Mettre à jour GitHub
-Remplace `app.js`, `index.html` et `sw.js` dans le dépôt `safezone-rpg`. Le cache passe en **v13**.
+Remplace `app.js`, `index.html` et `sw.js` dans le dépôt `safezone-rpg`. Le cache passe en **v14**.
 Ne mets pas le dossier `apps-script/` sur GitHub. Le fichier ne contient aucun secret, mais il n'a rien à faire dans un dépôt public.
 
 > L'ordre compte : déploie le serveur (étape 4) **avant** GitHub. Sinon, l'application ne pourra plus se connecter le temps de la transition.
